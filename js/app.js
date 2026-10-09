@@ -73,6 +73,20 @@ function render(nav = true) {
   const c = ctx();
   const tabs = document.querySelector('.tabs');
 
+  // With a Firebase config, nothing shows until the login has been checked and you are signed in.
+  const acc = store.account;
+  if (acc.cloud && (!acc.ready || !acc.user)) {
+    tabs.hidden = true;
+    ui.enter = '';
+    const body = !acc.ready
+      ? '<div class="muted" style="font-size:16px">Loading your data.</div>'
+      : `<div class="muted" style="font-size:16px">Your data is private to your own account. Sign in to open it.</div>
+         ${acc.error ? `<div class="form-error" role="alert">${esc(acc.error)}</div>` : ''}
+         ${acc.error?.startsWith('Could not load') ? '' : '<button type="button" class="btn primary" data-act="sign-in">Sign in with Google</button>'}`;
+    frame(c, 'Daily log', body, { sub: acc.ready ? 'Sign in' : 'One moment', bare: true });
+    return;
+  }
+
   // Nothing works without your numbers, so the first run is the setup screen and nothing else.
   if (!c.profile) {
     tabs.hidden = true;
@@ -105,10 +119,33 @@ function render(nav = true) {
   });
   if (index >= 0) tabs.style.setProperty('--i', index);
   tabs.classList.toggle('none', index < 0);
+  paintStatus();
   if (nav) scrollTo(0, 0);
 }
 
 app.redraw = () => render(false);
+actions['sign-in'] = () => store.signIn();
+actions['sign-out'] = () => store.signOut();
+
+// Where the data is right now, in plain words. Shown at the bottom of Today.
+function syncStatus() {
+  const acc = store.account;
+  if (acc.error) return { text: acc.error, cls: 'warn' };
+  if (!acc.cloud) return { text: 'Saved on this device only.', cls: 'warn' };
+  return acc.pending
+    ? { text: 'Saved on your phone. It syncs when you are online.', cls: 'warn' }
+    : { text: 'All synced.', cls: 'ok' };
+}
+function paintStatus() {
+  const el = document.querySelector('[data-sync]');
+  if (!el) return;
+  const s = syncStatus();
+  el.textContent = s.text;
+  el.className = `status ${s.cls}`;
+}
+store.hooks.status = paintStatus;
+addEventListener('online', paintStatus);
+addEventListener('offline', paintStatus);
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-act]');

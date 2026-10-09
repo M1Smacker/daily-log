@@ -629,6 +629,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 .update .btn { border-radius: 999px; padding: 0 18px; }
 .status.plain::before { display: none; }
+.status.ok::before { background: var(--protein); }
 
 /* Forms. Inputs are 16 px or more so Safari does not zoom in on focus. */
 [hidden] { display: none !important; }

@@ -55,6 +55,17 @@ export function settingsBody() {
       <div class="small muted">Face and stomach fat cannot be targeted. Both slim down as overall body fat falls.</div>
       <div class="small muted">Nothing in this app is medical advice. If you feel dizzy, unusually tired or your study focus drops, eat at maintenance for a week and see a doctor.</div>
     </section>
+    <section class="card">
+      <span class="card-title">Account</span>
+      ${store.account.cloud ? `
+        <div class="muted" style="font-size:14px">Signed in. Your data is in your own private database and on this phone for offline use.</div>
+        <label class="field"><span>Your user id</span>
+          <input type="text" readonly value="${esc(store.account.user?.uid ?? '')}" aria-label="Your user id" onfocus="this.select()">
+          <small>The security rules are pinned to this id, so no other account can read or write.</small>
+        </label>
+        <button type="button" class="btn" data-act="sign-out">Sign out</button>`
+      : '<div class="muted" style="font-size:14px">No login is set up yet, so everything is saved on this device only. Use the backup file on the Progress screen to keep a copy.</div>'}
+    </section>
     <div class="status plain">Version ${VERSION}</div>`;
 }
 

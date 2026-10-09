@@ -219,7 +219,7 @@ export function todayBody() {
   const run = rules.missedRun(days, c.key);
   return weekCard(c, days) + gapOffer(c, run) + nextSession(c, days, run) +
     calories(c, rules.totals(c.day.food ?? [])) + smallCards(c) +
-    '<div class="status">Saved on this device. Sync arrives with login.</div>';
+    '<div class="status" data-sync></div>';
 }
 
 // ----- Handlers -----

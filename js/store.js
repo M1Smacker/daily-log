@@ -1,44 +1,166 @@
-// Where the data lives. For now that is this device only.
-// The shapes match the Firestore documents they will become, so adding sync
-// later changes this file and nothing else:
+// Where the data lives.
+//
+// With no Firebase config (js/firebase-config.js is null) everything is kept on this device.
+// With a config, the same data lives in Firestore behind a Google login, with Firestore's own
+// offline database on the phone: writes land there first and sync when there is a connection.
+//
+// Either way the shapes are the same:
 //   profile            users/{uid}/meta/profile   height, weights, targets
 //   plan               users/{uid}/meta/plan      changes to the plan template (moved phases, rollover)
-//   days[YYYY-MM-DD]   users/{uid}/days/{key}     food, steps, water, weight, supplements, session
+//   days[YYYY-MM-DD]   users/{uid}/days/{key}     food, steps, water, weight, supplements, session, workout
 //   foods[id]          users/{uid}/foods/{id}     your own foods and edits to preloaded ones
+
+import { firebaseConfig } from './firebase-config.js';
 
 const KEY = 'daily-log';
 const VERSION = 1;
+// Loaded from Google's CDN only when a config exists. Match this to the version in the
+// snippet the Firebase console gives you.
+const SDK = 'https://www.gstatic.com/firebasejs/13.0.0';
 
-let data = { v: VERSION, profile: null, plan: {}, days: {}, foods: {} };
+const empty = () => ({ v: VERSION, profile: null, plan: {}, days: {}, foods: {} });
+let data = empty();
+let device = empty(); // what was on this device before login, uploaded once if the cloud is empty
 let onChange = () => {};
+let fb = null; // { auth, db, a: auth module, f: firestore module } once the SDK has loaded
+let stop = [];
 
-export function init(listener) {
+// What the screens need to know about login and sync.
+//   cloud    a Firebase config exists
+//   ready    data has loaded (always true on a device-only setup)
+//   user     { uid } when signed in
+//   pending  some writes are saved on the phone but not yet on the server
+//   error    a plain message when something went wrong
+export const account = { cloud: Boolean(firebaseConfig), ready: !firebaseConfig, user: null, pending: false, error: null };
+// Called when only the sync status changed, so the screen does not need a full redraw.
+export const hooks = { status: () => {} };
+
+export async function init(listener) {
   onChange = listener;
   try {
     const saved = JSON.parse(localStorage.getItem(KEY));
-    if (saved?.v === VERSION) data = { ...data, ...saved };
+    if (saved?.v === VERSION) device = { ...device, ...saved };
   } catch { /* nothing saved yet, or storage is blocked: start empty */ }
+  if (!firebaseConfig) {
+    data = device;
+    return;
+  }
+  try {
+    const [appMod, a, f] = await Promise.all(
+      ['app', 'auth', 'firestore'].map((m) => import(`${SDK}/firebase-${m}.js`)));
+    const app = appMod.initializeApp(firebaseConfig);
+    const db = f.initializeFirestore(app, {
+      localCache: f.persistentLocalCache({ tabManager: f.persistentMultipleTabManager() }),
+    });
+    fb = { auth: a.getAuth(app), db, a, f };
+    a.onAuthStateChanged(fb.auth, onUser);
+  } catch {
+    account.error = 'Could not load the login service. Check your connection and open the app again.';
+    account.ready = true;
+    onChange();
+  }
 }
 
-function save() {
-  try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* private mode: kept in memory only */ }
+// Same data regardless of key order, so a server echo of our own write is not seen as a change.
+const stable = (v) => JSON.stringify(v, (_, x) =>
+  (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.keys(x).sort().map((k) => [k, x[k]])) : x));
+
+function onUser(user) {
+  for (const off of stop) off();
+  stop = [];
+  data = empty();
+  account.user = user ? { uid: user.uid } : null;
+  account.pending = false;
+  account.ready = !user;
+  if (!user) return onChange();
+
+  const { db, f } = fb;
+  const at = (...path) => ['users', user.uid, ...path];
+  const loaded = {};
+  const pending = {};
+  const apply = (name, value, meta) => {
+    pending[name] = meta.hasPendingWrites;
+    account.pending = Object.values(pending).some(Boolean);
+    const first = !loaded[name];
+    loaded[name] = true;
+    // While our own writes are still on their way, memory is already right: leave it alone.
+    const changed = !meta.hasPendingWrites && stable(data[name]) !== stable(value);
+    if (changed) data[name] = value;
+    if (first && Object.keys(loaded).length === 4) {
+      account.ready = true;
+      uploadDeviceData();
+      return onChange();
+    }
+    if (changed && account.ready) onChange();
+    else hooks.status();
+  };
+  const fail = () => { account.error = 'The database refused the request. The security rules may not be published yet.'; account.ready = true; onChange(); };
+  const opts = { includeMetadataChanges: true };
+  const map = (snap) => { const out = {}; snap.forEach((d) => { out[d.id] = d.data(); }); return out; };
+  stop = [
+    f.onSnapshot(f.doc(db, ...at('meta', 'profile')), opts, (s) => apply('profile', s.exists() ? s.data() : null, s.metadata), fail),
+    f.onSnapshot(f.doc(db, ...at('meta', 'plan')), opts, (s) => apply('plan', s.exists() ? s.data() : {}, s.metadata), fail),
+    f.onSnapshot(f.collection(db, ...at('days')), opts, (s) => apply('days', map(s), s.metadata), fail),
+    f.onSnapshot(f.collection(db, ...at('foods')), opts, (s) => apply('foods', map(s), s.metadata), fail),
+  ];
 }
-function commit() {
-  save();
-  onChange();
+
+// First login on a device that was already in use: carry its data up, once, if the account is empty.
+function uploadDeviceData() {
+  if (data.profile || !device.profile) return;
+  data = structuredClone(device);
+  write(['meta', 'profile'], data.profile);
+  if (Object.keys(data.plan).length) write(['meta', 'plan'], data.plan);
+  for (const [k, d] of Object.entries(data.days)) write(['days', k], d);
+  for (const [id, food] of Object.entries(data.foods)) write(['foods', id], food);
+}
+
+// Saves one document. A null value deletes it. JSON round trip drops undefined, which Firestore rejects.
+function write(path, value) {
+  if (!firebaseConfig) {
+    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* private mode: kept in memory only */ }
+    return;
+  }
+  if (!account.user) return;
+  const ref = fb.f.doc(fb.db, 'users', account.user.uid, ...path);
+  const job = value === null ? fb.f.deleteDoc(ref) : fb.f.setDoc(ref, JSON.parse(JSON.stringify(value)));
+  job.catch(() => { account.error = 'A save was refused by the database. Nothing was lost on this phone.'; hooks.status(); });
 }
 
 export const get = () => data;
-export const setProfile = (profile) => { data.profile = { v: VERSION, ...profile }; commit(); };
-export const setPlan = (patch) => { data.plan = { ...data.plan, ...patch }; commit(); };
+export function setProfile(profile) {
+  data.profile = { v: VERSION, ...profile };
+  write(['meta', 'profile'], data.profile);
+  onChange();
+}
+export function setPlan(patch) {
+  data.plan = { ...data.plan, ...patch };
+  write(['meta', 'plan'], data.plan);
+  onChange();
+}
 // quiet saves without redrawing the screen, for typing into a field that must keep focus.
 export function setDay(key, patch, quiet = false) {
   data.days[key] = { ...data.days[key], ...patch };
-  if (quiet) save();
-  else commit();
+  write(['days', key], data.days[key]);
+  if (!quiet) onChange();
 }
 export function setFood(id, food) {
   if (food) data.foods[id] = food;
   else delete data.foods[id];
-  commit();
+  write(['foods', id], food ?? null);
+  onChange();
 }
+
+// Sign-in has to be a popup: the redirect method is broken on Safari for apps not on Firebase Hosting.
+export async function signIn() {
+  account.error = null;
+  try {
+    await fb.a.signInWithPopup(fb.auth, new fb.a.GoogleAuthProvider());
+  } catch (e) {
+    account.error = e?.code === 'auth/popup-blocked'
+      ? 'The sign-in window was blocked. Allow pop-ups for this app and try again.'
+      : 'Sign-in did not finish. Try again.';
+    onChange();
+  }
+}
+export const signOut = () => fb.a.signOut(fb.auth);
