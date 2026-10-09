@@ -95,6 +95,35 @@ test('shiftPhases: current end and later phases move, finished ones stay', () =>
   assert.deepEqual([moved[5].start, moved[5].end], ['2027-02-18', undefined]);
 });
 
+test('portion: by weight and by serving', () => {
+  const strips = { byGrams: true, grams: 100, kcal: 200, protein: 16, carbs: 12, fat: 9, fibre: 0.8 };
+  assert.deepEqual(r.portion(strips, 150), { kcal: 300, protein: 24, carbs: 18, fat: 13.5, fibre: 1.2 });
+  const roti = { kcal: 110, protein: 3, carbs: 22, fat: 1.5 }; // no fibre given
+  assert.deepEqual(r.portion(roti, 2), { kcal: 220, protein: 6, carbs: 44, fat: 3, fibre: 0 });
+  assert.deepEqual(r.portion(roti, 0.5), { kcal: 55, protein: 1.5, carbs: 11, fat: 0.8, fibre: 0 });
+});
+
+test('totals: adds entries and copes with an empty day', () => {
+  assert.deepEqual(r.totals([]), { kcal: 0, protein: 0, carbs: 0, fat: 0, fibre: 0 });
+  assert.deepEqual(
+    r.totals([{ kcal: 300, protein: 24, carbs: 18, fat: 13.5, fibre: 1.2 }, { kcal: 110, protein: 3, carbs: 22, fat: 1.5 }]),
+    { kcal: 410, protein: 27, carbs: 40, fat: 15, fibre: 1.2 },
+  );
+});
+
+test('mealFor and localHour: meal guessed from Kuwait time', () => {
+  assert.equal(r.localHour(new Date('2026-10-10T05:30:00Z')), 8);
+  assert.equal(r.localHour(new Date('2026-10-10T22:30:00Z')), 1);
+  assert.deepEqual([1, 8, 13, 17, 21].map(r.mealFor), ['dinner', 'breakfast', 'lunch', 'snack', 'dinner']);
+});
+
+test('targetWarnings: warns under the calorie and fat floors, never blocks', () => {
+  assert.equal(r.targetWarnings({ kcal: 2000, fat: 60 }).length, 0);
+  assert.equal(r.targetWarnings({ kcal: 1799, fat: 60 }).length, 1);
+  assert.equal(r.targetWarnings({ kcal: 1700, fat: 40 }).length, 2);
+  assert.equal(r.targetWarnings({ kcal: 1800, fat: 50 }).length, 0);
+});
+
 test('biggestGap: the macro furthest behind, or null', () => {
   const targets = { protein: 150, carbs: 200, fat: 70 };
   assert.equal(r.biggestGap(targets, { protein: 60, carbs: 130, fat: 45 }), 'protein');

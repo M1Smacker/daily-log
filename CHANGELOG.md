@@ -12,4 +12,6 @@
 - Guide page, opened from the phase pill: every phase plus short notes on RIR, the jump rule, missed days, weighing in and the rest.
 - Liquid glass tab bar (narrow pill, label only on the active tab), plus glass on the floating phase pill, settings button and day sheet.
 - Page transitions: tabs slide in from the side they sit on, Guide and Settings rise up, the day sheet slides up.
-- Tab bar with placeholder Workout, Food, Progress and Settings screens.
+- Core Tracker, on this device: first-run setup, Settings (targets with a warning under the calorie and fat floors, day rollover), water, steps, weight and supplement logging, session marks that save.
+- Food screen: preloaded and custom foods, search, amount by grams or servings, meals, edit and remove.
+- Workout and Progress are placeholders.

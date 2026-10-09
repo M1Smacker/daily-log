@@ -90,6 +90,38 @@ export function shiftPhases(phases, key, n) {
   });
 }
 
+export const MACROS = ['kcal', 'protein', 'carbs', 'fat', 'fibre'];
+const round1 = (n) => Math.round(n * 10) / 10;
+
+// food holds macros for one serving. amount is grams when the food is logged by weight
+// (food.byGrams, with food.grams in one serving), otherwise a number of servings.
+export function portion(food, amount) {
+  const servings = food.byGrams ? amount / food.grams : amount;
+  return Object.fromEntries(MACROS.map((m) => [m, round1((food[m] ?? 0) * servings)]));
+}
+
+export function totals(entries) {
+  const sum = Object.fromEntries(MACROS.map((m) => [m, 0]));
+  for (const e of entries) for (const m of MACROS) sum[m] += e[m] ?? 0;
+  for (const m of MACROS) sum[m] = round1(sum[m]);
+  return sum;
+}
+
+// Which meal a food most likely belongs to, from the local hour. Late night counts as dinner.
+export const mealFor = (hour) =>
+  hour < 4 ? 'dinner' : hour < 11 ? 'breakfast' : hour < 16 ? 'lunch' : hour < 19 ? 'snack' : 'dinner';
+export const localHour = (now, utcOffsetHours = 3) => new Date(now.getTime() + utcOffsetHours * 3600000).getUTCHours();
+
+// Things to warn about before saving targets. Never blocks, the choice stays with the user.
+export const KCAL_FLOOR = 1800;
+export const FAT_FLOOR = 50;
+export function targetWarnings(t) {
+  const out = [];
+  if (t.kcal < KCAL_FLOOR) out.push(`${t.kcal} kcal is under ${KCAL_FLOOR}. The plan says not to go below that, because it starts to cost muscle, energy and focus.`);
+  if (t.fat < FAT_FLOOR) out.push(`${t.fat} g of fat is under ${FAT_FLOOR} g. The plan keeps fat at ${FAT_FLOOR} g or more.`);
+  return out;
+}
+
 export const left = (target, eaten) => target - eaten;
 
 // The macro furthest behind its target, or null when all are met.

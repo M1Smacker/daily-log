@@ -20,7 +20,8 @@ node --test
 
 - `js/plan.js` is the plan template: phases, sessions, training days, step ramp.
 - `js/rules.js` holds the pure rules (day rollover, phase by date, week strip, next session). Tests are in `tests/`.
-- `js/sample.js` is made-up data for the screens until real storage is added.
+- `js/store.js` is where data is saved (this device for now, Firestore next). `js/state.js` turns it into what the screens need.
+- `js/today.js`, `js/food.js`, `js/settings.js` are the screens. `js/foods.js` is the preloaded food list. `js/guide.js` is the guide text.
 - `css/app.css` has the colour tokens at the top.
 
 Deploy and backup notes will be added when those parts exist.
