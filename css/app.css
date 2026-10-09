@@ -21,7 +21,7 @@
   --carbs: #7FB7E6;
   --amber: #F2A65A;
   --display: 'Barlow Condensed', sans-serif;
-  --card-bg: var(--surface);
+  --card-bg: var(--ground);
   --nav-space: calc(92px + env(safe-area-inset-bottom));
   --ease: cubic-bezier(0.3, 0.7, 0.2, 1);
 }
@@ -52,8 +52,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 
 .app {
   max-width: 430px;
+  overflow-x: clip; /* a page sliding in must not add a sideways scrollbar */
   margin: 0 auto;
-  padding: calc(28px + env(safe-area-inset-top)) 16px var(--nav-space);
+  padding: calc(10px + env(safe-area-inset-top)) 16px var(--nav-space);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -115,10 +116,8 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 
 /* Header */
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.head > div:first-child { min-width: 0; }
 .head .date { font-size: 14px; color: var(--muted); letter-spacing: 0.04em; }
 .head h1 { margin: 2px 0 0; font: 700 44px/1 var(--display); }
-.head-side { display: flex; align-items: center; gap: 8px; }
 .icon-btn {
   width: 44px;
   height: 44px;
@@ -258,9 +257,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   border-radius: 50%;
   background: var(--amber);
 }
-.looks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px; border: 1px dashed var(--line-strong); border-radius: 14px; }
-.looks button { min-height: 44px; border: 0; border-radius: 9px; background: none; color: var(--muted); font-weight: 600; }
-.looks button[aria-pressed='true'] { background: var(--accent); color: var(--on-accent); }
 
 /* Day sheet */
 .sheet {
@@ -315,6 +311,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .topic-body dt { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); padding-top: 4px; }
 .topic-body dd { margin: 0; }
 
+.guide .guide-group { margin: 28px 2px 10px; padding: 0; }
+.guide .guide-group:first-child { margin-top: 0; }
+
 /* Liquid glass tab bar: a narrow pill that page content scrolls behind. */
 .tabs {
   position: fixed;
@@ -325,14 +324,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   display: flex;
   padding: 6px;
   border-radius: 999px;
-  border: 1px solid rgb(255 255 255 / 0.16);
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.05) 45%, rgb(255 255 255 / 0.09));
-  -webkit-backdrop-filter: blur(22px) saturate(180%);
-  backdrop-filter: blur(22px) saturate(180%);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.38),
-    inset 0 -1px 0 rgb(255 255 255 / 0.08),
-    0 12px 32px rgb(0 0 0 / 0.55);
 }
 .tabs a {
   position: relative;
@@ -367,14 +358,65 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   transition: transform 0.35s var(--ease), opacity 0.2s;
 }
 .tabs.none .tab-glow { opacity: 0; }
+
+/* The glass recipe, shared by everything that floats over the page. */
+.tabs, .pill, .icon-btn {
+  border: 1px solid rgb(255 255 255 / 0.16);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.15), rgb(255 255 255 / 0.03) 45%, rgb(255 255 255 / 0.08)), rgb(16 16 18 / 0.55);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.38),
+    inset 0 -1px 0 rgb(255 255 255 / 0.08),
+    0 12px 32px rgb(0 0 0 / 0.55);
+}
+.pill, .icon-btn { color: #fff; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.38), inset 0 -1px 0 rgb(255 255 255 / 0.08), 0 6px 18px rgb(0 0 0 / 0.45); }
+.pill svg { color: rgb(255 255 255 / 0.7); }
+.sheet {
+  background: rgb(30 30 33 / 0.72);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border-color: rgb(255 255 255 / 0.16);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3);
+}
+
+/* Floating controls at the top. The page scrolls behind them, which is what the glass needs. */
+.topbar {
+  position: sticky;
+  top: calc(10px + env(safe-area-inset-top));
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+}
+.topbar > * { pointer-events: auto; }
+
+/* Page change: the new page settles in from the side it came from. */
+@keyframes page-in {
+  from { opacity: 0; transform: translate3d(var(--dx, 0), var(--dy, 0), 0) scale(0.985); }
+}
+.page.from-right { --dx: 36px; }
+.page.from-left { --dx: -36px; }
+.page.from-below { --dy: 28px; }
+.page.from-above { --dy: -20px; }
+.page[class*='from-'] { animation: page-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes dim-in { from { opacity: 0; } }
+.sheet[open] { animation: sheet-up 0.36s cubic-bezier(0.16, 1, 0.3, 1); }
+.sheet[open]::backdrop { animation: dim-in 0.25s ease-out; }
+
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .tabs { background: #222225; }
+  .tabs, .pill, .icon-btn { background: #222225; }
+  .sheet { background: #1c1c1e; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .tabs { background: #222225; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .tabs, .pill, .icon-btn, .sheet { background: #222225; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .tabs a, .tabs a span, .tab-glow, .topic summary svg { transition: none; }
+  .page[class*='from-'], .sheet[open], .sheet[open]::backdrop { animation: none; }
 }
 
 /* The next session is a paper ticket: the one bright object on a black screen. */
@@ -409,25 +451,20 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .ticket .tear::before { left: -10px; }
 .ticket .tear::after { right: -10px; }
 
-/* ---------- Look: Panels. Rounded outlined panels, the label set into the border,
-   big scoreboard numbers inside. ---------- */
-[data-look='panels'] { --card-bg: var(--ground); }
-[data-look='panels'] .app { gap: 24px; }
-[data-look='panels'] .head { flex-direction: column-reverse; gap: 14px; }
-[data-look='panels'] .head-side { align-self: stretch; justify-content: space-between; }
-[data-look='panels'] .head h1 { font-size: 64px; line-height: 0.9; text-transform: uppercase; }
-[data-look='panels'] :is(.card:not(.ticket, .raised), .week-card) {
+.page { display: flex; flex-direction: column; gap: 24px; }
+.head h1 { font-size: 64px; line-height: 0.9; text-transform: uppercase; }
+:is(.card:not(.ticket, .raised), .week-card) {
   position: relative;
   background: none;
   border: 1px solid var(--line-strong);
   border-radius: 22px;
 }
-[data-look='panels'] .card:not(.ticket, .raised) { padding: 26px 18px 18px; }
-[data-look='panels'] .card.raised { border-radius: 22px; }
-[data-look='panels'] .ticket { border-radius: 22px; }
+.card:not(.ticket, .raised) { padding: 26px 18px 18px; }
+.card.raised { border-radius: 22px; }
+.ticket { border-radius: 22px; }
 /* Labels sit in the border line, like the legend of a form field. */
-[data-look='panels'] .card:not(.ticket, .raised) .card-title,
-[data-look='panels'] .kcal-left {
+.card:not(.ticket, .raised) .card-title,
+.kcal-left {
   position: absolute;
   top: -9px;
   left: 16px;
@@ -437,19 +474,19 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
-[data-look='panels'] .kcal-left { left: auto; right: 16px; }
-[data-look='panels'] .kcal { padding-top: 14px; }
-[data-look='panels'] .kcal .big { font-size: 88px; line-height: 0.85; }
-[data-look='panels'] .bar { height: 6px; }
-[data-look='panels'] .bar.tall { height: 10px; }
-[data-look='panels'] .macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 10px; }
-[data-look='panels'] .macro .row { flex-direction: column; align-items: flex-start; gap: 2px; font-size: 12px; }
-[data-look='panels'] .macro .row > span:first-child { font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-[data-look='panels'] .macro b { font: 700 34px/1 var(--display); margin-right: 2px; }
-[data-look='panels'] .grid2 { gap: 24px 12px; }
-[data-look='panels'] .mini { padding: 24px 16px 16px; }
-[data-look='panels'] .mini .big { font-size: 54px; line-height: 0.9; }
-[data-look='panels'] .mini .big.muted { font-size: 38px; line-height: 1.25; white-space: nowrap; }
-[data-look='panels'] .week-card { padding: 16px 6px 6px; }
-[data-look='panels'] .week-card:has(.month) .fold { border-radius: 0 0 20px 20px; }
+.kcal-left { left: auto; right: 16px; }
+.kcal { padding-top: 14px; }
+.kcal .big { font-size: 88px; line-height: 0.85; }
+.bar { height: 6px; }
+.bar.tall { height: 10px; }
+.macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 10px; }
+.macro .row { flex-direction: column; align-items: flex-start; gap: 2px; font-size: 12px; }
+.macro .row > span:first-child { font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.macro b { font: 700 34px/1 var(--display); margin-right: 2px; }
+.grid2 { gap: 24px 12px; }
+.mini { padding: 24px 16px 16px; }
+.mini .big { font-size: 54px; line-height: 0.9; }
+.mini .big.muted { font-size: 38px; line-height: 1.25; white-space: nowrap; }
+.week-card { padding: 16px 6px 6px; }
+.week-card:has(.month) .fold { border-radius: 0 0 20px 20px; }
 

@@ -3,19 +3,6 @@ import * as rules from './rules.js';
 import { targets, today, log as sampleLog } from './sample.js';
 import { topics } from './guide.js';
 
-// Two looks to compare while the design is being chosen. Remembered on this device only.
-const LOOKS = { panels: 'Panels', ticket: 'Ticket' };
-function currentLook() {
-  const fromUrl = new URLSearchParams(location.search).get('look');
-  if (LOOKS[fromUrl]) return fromUrl;
-  try { return LOOKS[localStorage.getItem('look')] ? localStorage.getItem('look') : 'panels'; } catch { return 'panels'; }
-}
-function setLook(look) {
-  document.documentElement.dataset.look = look;
-  try { localStorage.setItem('look', look); } catch { /* private mode: just not remembered */ }
-}
-document.documentElement.dataset.look = currentLook();
-
 // Held in memory for now. Core Tracker moves this to Firestore.
 const state = {
   plan: structuredClone(basePlan),
@@ -50,19 +37,35 @@ const todayKey = () =>
 
 const sessionOf = (d) => state.plan.sessions[d.session];
 
-function header(key, title) {
+// Every screen: glass controls that float at the top, then the page, which animates in.
+function frame(key, title, body, { sub, back = false } = {}) {
   const phase = rules.phaseFor(key, state.plan.phases);
-  return `
-    <header class="head">
-      <div>
-        <div class="date">${fmt(key, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-        <h1>${title}</h1>
-      </div>
-      <div class="head-side">
-        ${phase ? `<a class="pill" href="#guide" aria-label="${phase.name}, open the guide">${phase.name}${CHEVRON_RIGHT}</a>` : ''}
-        <a class="icon-btn" href="#settings" aria-label="Settings">${SETTINGS}</a>
-      </div>
-    </header>`;
+  const pill = phase
+    ? `<a class="pill" href="#guide" aria-label="${phase.name}, open the guide">${phase.name}${CHEVRON_RIGHT}</a>`
+    : '<span></span>';
+  const backBtn = `<a class="icon-btn" href="#today" aria-label="Back to Today">${BACK}</a>`;
+  const settings = `<a class="icon-btn" href="#settings" aria-label="Settings">${SETTINGS}</a>`;
+  view.innerHTML = `
+    <div class="topbar">${back ? backBtn : pill}${title === 'Settings' ? pill : settings}</div>
+    <div class="page ${state.enter}">
+      <header class="head">
+        <div>
+          <div class="date">${sub ?? fmt(key, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+          <h1>${title}</h1>
+        </div>
+      </header>
+      ${body}
+    </div>`;
+}
+
+// Which side a page comes in from. Tabs slide sideways, Guide and Settings rise up.
+const TAB_ORDER = ['today', 'workout', 'food', 'progress'];
+function enterFrom(prev, next) {
+  const a = TAB_ORDER.indexOf(prev);
+  const b = TAB_ORDER.indexOf(next);
+  if (b === -1) return 'from-below';
+  if (a === -1) return 'from-above';
+  return b > a ? 'from-right' : 'from-left';
 }
 
 // One day, in the strip or the calendar. Days up to today can be tapped to mark them.
@@ -257,24 +260,16 @@ function smallCards(key) {
 function renderToday(key) {
   const days = rules.schedule(state.plan, state.log, key);
   const run = rules.missedRun(days, key);
-  view.innerHTML =
-    header(key, 'Today') + weekCard(days, key) + gapOffer(run) + nextSession(days, key, run) +
-    calories() + smallCards(key) +
-    '<div class="status">Sample numbers. Nothing is saved yet.</div>' + lookSwitch();
-}
-
-// Temporary: removed once one look is chosen.
-function lookSwitch() {
-  const now = document.documentElement.dataset.look;
-  return `<div class="looks" role="group" aria-label="Compare the two looks">
-    ${Object.entries(LOOKS).map(([id, name]) => `<button type="button" data-look-set="${id}" aria-pressed="${id === now}">${name}</button>`).join('')}
-  </div>`;
+  frame(key, 'Today',
+    weekCard(days, key) + gapOffer(run) + nextSession(days, key, run) + calories() + smallCards(key) +
+    '<div class="status">Sample numbers. Nothing is saved yet.</div>');
 }
 
 function renderPlaceholder(key, title) {
-  view.innerHTML = header(key, title) +
+  frame(key, title,
     '<section class="card"><div class="muted">Not built yet. Only the Today screen and the guide exist so far.</div></section>' +
-    (title === 'Settings' ? `<a class="btn" href="#guide">Open the guide</a>${lookSwitch()}` : '');
+    (title === 'Settings' ? '<a class="btn" href="#guide">Open the guide</a>' : ''),
+    { back: title === 'Settings' });
 }
 
 const topic = (title, body, extra = '', open = false) => `
@@ -298,15 +293,9 @@ function renderGuide(key) {
   )).join('');
   const rest = topics.map((g) =>
     `<div class="guide-group">${g.group}</div>` + g.items.map((t) => topic(t.title, t.body)).join('')).join('');
-  view.innerHTML = `
-    <header class="head">
-      <div>
-        <div class="date">How the plan works</div>
-        <h1>Guide</h1>
-      </div>
-      <a class="icon-btn" href="#today" aria-label="Back to Today">${BACK}</a>
-    </header>
-    <div class="guide-group">The phases</div>${phases}${rest}`;
+  frame(key, 'Guide', `<div class="guide">
+      <div class="guide-group">The phases</div>${phases}${rest}
+    </div>`, { sub: 'How the plan works', back: true });
 }
 
 // The sheet for marking one day.
@@ -345,9 +334,13 @@ function setEntry(k, type, reason) {
 
 const TITLES = { workout: 'Workout', food: 'Food', progress: 'Progress', settings: 'Settings' };
 
-function render(toTop = true) {
+// nav is true when the page changed, false when the same page is just redrawn.
+function render(nav = true) {
   const tab = location.hash.slice(1) || 'today';
   const key = todayKey();
+  state.enter = nav && state.tab && state.tab !== tab ? enterFrom(state.tab, tab) : '';
+  state.tab = tab;
+  const toTop = nav;
   if (tab === 'guide') renderGuide(key);
   else if (TITLES[tab]) renderPlaceholder(key, TITLES[tab]);
   else renderToday(key);
@@ -366,13 +359,10 @@ function render(toTop = true) {
 }
 
 document.addEventListener('click', (e) => {
-  const el = e.target.closest('[data-act], [data-set], [data-day], [data-look-set]');
+  const el = e.target.closest('[data-act], [data-set], [data-day]');
   if (!el) return;
   const key = todayKey();
-  if (el.dataset.lookSet) {
-    setLook(el.dataset.lookSet);
-    render(false);
-  } else if (el.dataset.set) {
+  if (el.dataset.set) {
     sheet.close();
     setEntry(el.dataset.day, el.dataset.set, el.dataset.reason);
   } else if (el.dataset.day) {
