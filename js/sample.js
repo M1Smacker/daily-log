@@ -8,4 +8,4 @@ export const today = {
   steps: 3000, waterMl: 1000, weightKg: null,
 };
 
-export const done = { '2026-10-08': 'upperA' };
+export const log = { '2026-10-08': { type: 'done' } };

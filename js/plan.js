@@ -3,6 +3,7 @@
 
 export const plan = {
   start: '2026-10-08',
+  end: '2027-03-23', // where the plan line and the calendar stop
   utcOffsetHours: 3, // Asia/Kuwait
   rolloverHour: 4,
   weekStartDow: 4, // Thursday
