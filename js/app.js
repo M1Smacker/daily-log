@@ -4,11 +4,11 @@ import { targets, today, log as sampleLog } from './sample.js';
 import { topics } from './guide.js';
 
 // Two looks to compare while the design is being chosen. Remembered on this device only.
-const LOOKS = { ticket: 'Ticket', scoreboard: 'Scoreboard' };
+const LOOKS = { panels: 'Panels', ticket: 'Ticket' };
 function currentLook() {
   const fromUrl = new URLSearchParams(location.search).get('look');
   if (LOOKS[fromUrl]) return fromUrl;
-  try { return LOOKS[localStorage.getItem('look')] ? localStorage.getItem('look') : 'ticket'; } catch { return 'ticket'; }
+  try { return LOOKS[localStorage.getItem('look')] ? localStorage.getItem('look') : 'panels'; } catch { return 'panels'; }
 }
 function setLook(look) {
   document.documentElement.dataset.look = look;

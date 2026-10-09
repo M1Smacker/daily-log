@@ -377,27 +377,27 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   .tabs a, .tabs a span, .tab-glow, .topic summary svg { transition: none; }
 }
 
-/* ---------- Look: Ticket. One bright paper object on a black screen. ---------- */
-[data-look='ticket'] .ticket {
+/* The next session is a paper ticket: the one bright object on a black screen. */
+.ticket {
   background: var(--paper);
   border: 0;
   color: var(--ink);
   padding: 20px;
   gap: 14px;
 }
-[data-look='ticket'] .ticket .muted { color: rgb(10 10 11 / 0.66); }
-[data-look='ticket'] .ticket .btn { border-color: var(--ink); }
-[data-look='ticket'] .ticket .btn.primary { background: var(--ink); color: var(--paper); }
-[data-look='ticket'] .ticket .note { background: rgb(10 10 11 / 0.08); }
-[data-look='ticket'] .tear {
+.ticket .muted { color: rgb(10 10 11 / 0.66); }
+.ticket .btn { border-color: var(--ink); }
+.ticket .btn.primary { background: var(--ink); color: var(--paper); }
+.ticket .note { background: rgb(10 10 11 / 0.08); }
+.ticket .tear {
   display: block;
   position: relative;
   height: 0;
   margin: 4px -20px;
   border-top: 2px dashed rgb(10 10 11 / 0.32);
 }
-[data-look='ticket'] .tear::before,
-[data-look='ticket'] .tear::after {
+.ticket .tear::before,
+.ticket .tear::after {
   content: '';
   position: absolute;
   top: -11px;
@@ -406,47 +406,50 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   border-radius: 50%;
   background: var(--ground);
 }
-[data-look='ticket'] .tear::before { left: -10px; }
-[data-look='ticket'] .tear::after { right: -10px; }
+.ticket .tear::before { left: -10px; }
+.ticket .tear::after { right: -10px; }
 
-/* ---------- Look: Scoreboard. No boxes, big numbers, thin rules. ---------- */
-[data-look='scoreboard'] { --card-bg: var(--ground); }
-[data-look='scoreboard'] .app { gap: 0; }
-[data-look='scoreboard'] .head { flex-direction: column-reverse; gap: 14px; padding-bottom: 16px; }
-[data-look='scoreboard'] .head-side { align-self: stretch; justify-content: space-between; }
-[data-look='scoreboard'] .head h1 { font-size: 64px; line-height: 0.9; text-transform: uppercase; }
-[data-look='scoreboard'] :is(.card, .week-card) {
-  border: 0;
-  border-top: 1px solid var(--line-strong);
-  border-radius: 0;
+/* ---------- Look: Panels. Rounded outlined panels, the label set into the border,
+   big scoreboard numbers inside. ---------- */
+[data-look='panels'] { --card-bg: var(--ground); }
+[data-look='panels'] .app { gap: 24px; }
+[data-look='panels'] .head { flex-direction: column-reverse; gap: 14px; }
+[data-look='panels'] .head-side { align-self: stretch; justify-content: space-between; }
+[data-look='panels'] .head h1 { font-size: 64px; line-height: 0.9; text-transform: uppercase; }
+[data-look='panels'] :is(.card:not(.ticket, .raised), .week-card) {
+  position: relative;
   background: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 22px;
 }
-[data-look='scoreboard'] .card { padding: 18px 2px 22px; }
-[data-look='scoreboard'] .card.raised { padding-inline: 14px; background: var(--raised); }
-[data-look='scoreboard'] .week-card { padding: 16px 0 4px; }
-[data-look='scoreboard'] .card-title { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-[data-look='scoreboard'] .session-name { font-size: 84px; line-height: 0.85; }
-[data-look='scoreboard'] .btn { border-radius: 4px; }
-[data-look='scoreboard'] .bar { height: 5px; border-radius: 0; }
-[data-look='scoreboard'] .bar.tall { height: 8px; }
-[data-look='scoreboard'] .kcal .big { font-size: 96px; line-height: 0.85; }
-[data-look='scoreboard'] .macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 10px; }
-[data-look='scoreboard'] .macro .row { flex-direction: column; align-items: flex-start; gap: 2px; font-size: 12px; }
-[data-look='scoreboard'] .macro .row > span:first-child { font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
-[data-look='scoreboard'] .macro b { font: 700 34px/1 var(--display); margin-right: 2px; }
-[data-look='scoreboard'] .grid2 { display: block; }
-[data-look='scoreboard'] .mini {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: end;
-  gap: 4px 12px;
+[data-look='panels'] .card:not(.ticket, .raised) { padding: 26px 18px 18px; }
+[data-look='panels'] .card.raised { border-radius: 22px; }
+[data-look='panels'] .ticket { border-radius: 22px; }
+/* Labels sit in the border line, like the legend of a form field. */
+[data-look='panels'] .card:not(.ticket, .raised) .card-title,
+[data-look='panels'] .kcal-left {
+  position: absolute;
+  top: -9px;
+  left: 16px;
+  padding: 0 8px;
+  background: var(--ground);
+  font: 600 12px/18px 'Barlow', sans-serif;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
-[data-look='scoreboard'] .mini .card-title { grid-column: 1; }
-[data-look='scoreboard'] .mini .big { grid-column: 2; grid-row: 1 / span 2; font-size: 64px; line-height: 0.85; }
-[data-look='scoreboard'] .mini .sub { grid-column: 1; }
-[data-look='scoreboard'] .mini :is(.bar, .btn, .ticks) { grid-column: 1 / -1; margin-top: 8px; }
-[data-look='scoreboard'] .ticks { flex-direction: row; gap: 26px; }
-[data-look='scoreboard'] .status { padding-top: 18px; border-top: 1px solid var(--line-strong); }
-[data-look='scoreboard'] .looks { margin-top: 14px; border-radius: 4px; }
-[data-look='scoreboard'] .looks button { border-radius: 2px; }
-[data-look='scoreboard'] .guide-group { padding: 6px 0 12px; }
+[data-look='panels'] .kcal-left { left: auto; right: 16px; }
+[data-look='panels'] .kcal { padding-top: 14px; }
+[data-look='panels'] .kcal .big { font-size: 88px; line-height: 0.85; }
+[data-look='panels'] .bar { height: 6px; }
+[data-look='panels'] .bar.tall { height: 10px; }
+[data-look='panels'] .macros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 10px; }
+[data-look='panels'] .macro .row { flex-direction: column; align-items: flex-start; gap: 2px; font-size: 12px; }
+[data-look='panels'] .macro .row > span:first-child { font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+[data-look='panels'] .macro b { font: 700 34px/1 var(--display); margin-right: 2px; }
+[data-look='panels'] .grid2 { gap: 24px 12px; }
+[data-look='panels'] .mini { padding: 24px 16px 16px; }
+[data-look='panels'] .mini .big { font-size: 54px; line-height: 0.9; }
+[data-look='panels'] .mini .big.muted { font-size: 38px; line-height: 1.25; white-space: nowrap; }
+[data-look='panels'] .week-card { padding: 16px 6px 6px; }
+[data-look='panels'] .week-card:has(.month) .fold { border-radius: 0 0 20px 20px; }
+
