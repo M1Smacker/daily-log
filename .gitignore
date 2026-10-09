@@ -1,0 +1,8 @@
+.claude/
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+.env*
+*serviceAccount*.json
+.firebase/
