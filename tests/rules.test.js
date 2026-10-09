@@ -95,6 +95,72 @@ test('shiftPhases: current end and later phases move, finished ones stay', () =>
   assert.deepEqual([moved[5].start, moved[5].end], ['2027-02-18', undefined]);
 });
 
+const phase = (name) => plan.phases.find((p) => p.name.startsWith(name));
+const DB = plan.dumbbells;
+
+test('setsFor: Foundation ramps in, deload halves, minimum is 2', () => {
+  const squat = { sets: 3, main: true };
+  const curl = { sets: 3, main: false };
+  const f = phase('Foundation');
+  assert.equal(r.setsFor(squat, f, '2026-10-10'), 2); // first week: 2 sets of everything
+  assert.equal(r.setsFor(squat, f, '2026-10-15'), 3); // after: full sets on main lifts
+  assert.equal(r.setsFor(curl, f, '2026-10-15'), 2); // and 2 on isolation work
+  assert.equal(r.setsFor(curl, phase('Build'), '2026-11-01'), 3);
+  assert.equal(r.setsFor(squat, phase('Deload'), '2026-12-11'), 2); // half of 3, rounded up
+  assert.equal(r.setsFor({ sets: 2, main: true }, phase('Deload'), '2026-12-11'), 1);
+  assert.equal(r.setsFor(squat, phase('Build'), '2026-11-01', true), 2); // minimum session
+});
+
+test('targetRir: follows the phase', () => {
+  assert.deepEqual(r.targetRir(phase('Foundation'), '2026-10-10'), [3, 4]);
+  assert.deepEqual(r.targetRir(phase('Foundation'), '2026-10-20'), [2, 3]);
+  assert.deepEqual(r.targetRir(phase('Build'), '2026-11-01'), [1, 3]);
+  assert.deepEqual(r.targetRir(phase('Build'), '2026-11-01', true), [0, 1]); // last isolation set
+  assert.deepEqual(r.targetRir(phase('Push'), '2026-12-20', true), [0, 2]);
+  assert.deepEqual(r.targetRir(phase('Deload'), '2026-12-11'), [4, 4]);
+});
+
+test('nextWeight: barbell 2.5 kg, machine 5 kg, dumbbell the next one up', () => {
+  assert.equal(r.nextWeight('barbell', 40, DB), 42.5);
+  assert.equal(r.nextWeight('machine', 40, DB), 45);
+  assert.equal(r.nextWeight('dumbbell', 7.5, DB), 8);
+  assert.equal(r.nextWeight('dumbbell', 20, DB), null);
+  assert.equal(r.nextWeight('body', 0, DB), null);
+});
+
+test('progression: the jump rule', () => {
+  const squat = { kind: 'barbell', reps: [6, 10] };
+  const set = (kg, reps, rir) => ({ kg, reps, rir });
+  assert.deepEqual(r.progression(squat, null, DB), { type: 'start' });
+  // not every set at the top yet
+  assert.deepEqual(r.progression(squat, { sets: [set(40, 10, 2), set(40, 10, 2), set(40, 9, 1)], planned: 3, rirLo: 1 }, DB), { type: 'hold', kg: 40 });
+  // top of the range on every set, at the asked effort
+  assert.deepEqual(r.progression(squat, { sets: [set(40, 10, 2), set(40, 10, 1), set(40, 10, 1)], planned: 3, rirLo: 1 }, DB), { type: 'jump', kg: 40, to: 42.5 });
+  // top reps, but ground out harder than the phase asked: not earned
+  assert.deepEqual(r.progression(squat, { sets: [set(40, 10, 2), set(40, 10, 1), set(40, 10, 0)], planned: 3, rirLo: 1 }, DB), { type: 'hold', kg: 40 });
+  // the same sets in a phase that allows 0 in reserve do earn it
+  assert.equal(r.progression(squat, { sets: [set(40, 10, 2), set(40, 10, 1), set(40, 10, 0)], planned: 3, rirLo: 0 }, DB).type, 'jump');
+  // fewer sets than planned does not count
+  assert.equal(r.progression(squat, { sets: [set(40, 10, 2), set(40, 10, 2)], planned: 3, rirLo: 1 }, DB).type, 'hold');
+});
+
+test('progression: big jumps need extra reps, and the heaviest dumbbell points to the alternative', () => {
+  const raise = { kind: 'dumbbell', reps: [12, 20] };
+  const sets = (kg, reps) => ({ sets: [{ kg, reps, rir: 2 }, { kg, reps, rir: 2 }], planned: 2, rirLo: 1 });
+  assert.deepEqual(r.progression(raise, sets(5, 20), DB), { type: 'extra', kg: 5, to: 7, need: 23 }); // 5 to 7 kg is 40%
+  assert.deepEqual(r.progression(raise, sets(5, 23), DB), { type: 'jump', kg: 5, to: 7 });
+  assert.deepEqual(r.progression(raise, sets(7.5, 20), DB), { type: 'jump', kg: 7.5, to: 8 }); // a small step
+  assert.deepEqual(r.progression(raise, sets(20, 20), DB), { type: 'cap', kg: 20 });
+  assert.deepEqual(r.progression({ kind: 'body', reps: [6, 12] }, sets(0, 12), DB), { type: 'body' });
+});
+
+test('wentBackwards: two drops in a row', () => {
+  const s = (kg, reps) => r.bestSet([{ kg, reps }]);
+  assert.equal(r.wentBackwards([s(40, 10), s(40, 9), s(40, 8)]), true);
+  assert.equal(r.wentBackwards([s(40, 10), s(40, 9), s(40, 10)]), false);
+  assert.equal(r.wentBackwards([s(40, 9), s(40, 8)]), false); // needs three sessions
+});
+
 test('portion: by weight and by serving', () => {
   const strips = { byGrams: true, grams: 100, kcal: 200, protein: 16, carbs: 12, fat: 9, fibre: 0.8 };
   assert.deepEqual(r.portion(strips, 150), { kcal: 300, protein: 24, carbs: 18, fat: 13.5, fibre: 1.2 });

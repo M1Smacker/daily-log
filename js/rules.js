@@ -90,7 +90,83 @@ export function shiftPhases(phases, key, n) {
   });
 }
 
-export const MACROS = ['kcal', 'protein', 'carbs', 'fat', 'fibre'];
+// ----- Training -----
+
+export const MIN_EXERCISES = 3; // the minimum session is the first three lifts
+const MIN_SETS = 2;
+
+// How many sets to do today. ex: { sets, main }, phase: { load, start }.
+export function setsFor(ex, phase, key, minimum = false) {
+  if (minimum) return Math.min(MIN_SETS, ex.sets);
+  if (phase?.load === 'half') return Math.ceil(ex.sets / 2);
+  if (phase?.load === 'ramp') {
+    const firstWeek = diffDays(key, phase.start) < 7;
+    return firstWeek || !ex.main ? Math.min(MIN_SETS, ex.sets) : ex.sets;
+  }
+  return ex.sets;
+}
+
+// The effort to aim for, as [from, to] reps in reserve.
+export function targetRir(phase, key, lastIsoSet = false) {
+  if (!phase) return [1, 3];
+  if (phase.rirFirstWeek && diffDays(key, phase.start) < 7) return phase.rirFirstWeek;
+  if (lastIsoSet && phase.rirLastIso) return phase.rirLastIso;
+  return phase.rir;
+}
+
+export const JUMP_KG = { barbell: 2.5, machine: 5 };
+const BIG_JUMP = 0.15; // a jump of more than 15% needs extra reps first
+export const EXTRA_REPS = 3;
+
+export function nextWeight(kind, kg, dumbbells) {
+  if (kind === 'dumbbell') return dumbbells.find((w) => w > kg) ?? null;
+  return JUMP_KG[kind] ? kg + JUMP_KG[kind] : null;
+}
+
+// The jump rule (double progression). Keep the weight until every set reaches the top of
+// the rep range at the effort the phase asked for, then go up by the smallest jump.
+//   ex:   { kind, reps: [low, high] }
+//   last: the previous time this lift was done: { sets: [{ kg, reps, rir }], planned, rirLo }
+// Returns one of:
+//   { type: 'start' }                    never done before
+//   { type: 'body' }                     no weight to add, progress in reps
+//   { type: 'hold', kg }                 same weight, keep building reps
+//   { type: 'jump', kg, to }             earned: go to `to`
+//   { type: 'extra', kg, to, need }      the next step is big: reach `need` reps on every set first
+//   { type: 'cap', kg }                  earned, but there is nothing heavier: use the alternative
+export function progression(ex, last, dumbbells) {
+  const sets = (last?.sets ?? []).filter((s) => s.reps > 0);
+  if (!sets.length) return { type: 'start' };
+  if (ex.kind === 'body') return { type: 'body' };
+  const kg = Math.min(...sets.map((s) => s.kg ?? 0));
+  if (!(kg > 0)) return { type: 'start' };
+
+  const top = ex.reps[1];
+  const effortOk = sets.every((s) => s.rir == null || s.rir >= (last.rirLo ?? 0));
+  const earned = sets.length >= (last.planned ?? 1) && sets.every((s) => s.reps >= top) && effortOk;
+  if (!earned) return { type: 'hold', kg };
+
+  const to = nextWeight(ex.kind, kg, dumbbells);
+  if (to === null) return { type: 'cap', kg };
+  const need = top + EXTRA_REPS;
+  if ((to - kg) / kg > BIG_JUMP && !sets.every((s) => s.reps >= need)) return { type: 'extra', kg, to, need };
+  return { type: 'jump', kg, to };
+}
+
+// A rough strength score for one session of a lift: the best set, as an estimated one-rep max.
+export const bestSet = (sets) =>
+  Math.max(0, ...sets.filter((s) => s.reps > 0).map((s) => (s.kg ?? 0) * (1 + s.reps / 30)));
+
+// True when a lift's score has dropped two sessions running. scores: oldest first,
+// with deload and minimum sessions already left out.
+export const wentBackwards = (scores) => {
+  const [a, b, c] = scores.slice(-3);
+  return scores.length >= 3 && c < b && b < a;
+};
+
+// ----- Food -----
+
+export const MACROS =['kcal', 'protein', 'carbs', 'fat', 'fibre'];
 const round1 = (n) => Math.round(n * 10) / 10;
 
 // food holds macros for one serving. amount is grams when the food is logged by weight

@@ -8,6 +8,7 @@ import { view, sheet, esc, shortDate, longDate, SETTINGS, CHEVRON_RIGHT, BACK, C
 import { todayBody } from './today.js';
 import { foodBody, filterChips } from './food.js';
 import { setupBody, settingsBody } from './settings.js';
+import { workoutView, refreshRest } from './workout.js';
 import { topics } from './guide.js';
 import { startPwa } from './pwa.js';
 
@@ -91,7 +92,11 @@ function render(nav = true) {
   else if (tab === 'food') { frame(c, 'Food', foodBody()); filterChips(); }
   else if (tab === 'settings') frame(c, 'Settings', settingsBody(), { sub: 'Your numbers and the plan', back: true });
   else if (tab === 'guide') frame(c, 'Guide', guideBody(c), { sub: 'How the plan works', back: true });
-  else frame(c, tab === 'workout' ? 'Workout' : 'Progress', notBuilt);
+  else if (tab === 'workout') {
+    const w = workoutView();
+    frame(c, w.title, w.body, { sub: w.sub });
+    refreshRest();
+  } else frame(c, 'Progress', notBuilt);
 
   // Guide and Settings are not tabs, so nothing is lit for them.
   const index = TAB_ORDER.indexOf(tab);

@@ -20,15 +20,23 @@ export function init(listener) {
   } catch { /* nothing saved yet, or storage is blocked: start empty */ }
 }
 
-function commit() {
+function save() {
   try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* private mode: kept in memory only */ }
+}
+function commit() {
+  save();
   onChange();
 }
 
 export const get = () => data;
 export const setProfile = (profile) => { data.profile = { v: VERSION, ...profile }; commit(); };
 export const setPlan = (patch) => { data.plan = { ...data.plan, ...patch }; commit(); };
-export const setDay = (key, patch) => { data.days[key] = { ...data.days[key], ...patch }; commit(); };
+// quiet saves without redrawing the screen, for typing into a field that must keep focus.
+export function setDay(key, patch, quiet = false) {
+  data.days[key] = { ...data.days[key], ...patch };
+  if (quiet) save();
+  else commit();
+}
 export function setFood(id, food) {
   if (food) data.foods[id] = food;
   else delete data.foods[id];

@@ -116,7 +116,10 @@ function nextSession(c, days, run) {
         <div class="session-name">${c.plan.sessions[todayDay.session].name}</div>
         <div class="muted" style="font-size:14px">${nextLine}</div>
         <div class="tear"></div>
-        <button type="button" class="btn" data-act="mark-today" data-type="clear">Undo</button>
+        <div class="pair">
+          <button type="button" class="btn primary" data-act="start-workout">Open session</button>
+          <button type="button" class="btn" data-act="mark-today" data-type="clear">Undo</button>
+        </div>
       </section>`;
   }
   if (!next) return '';
@@ -137,8 +140,8 @@ function nextSession(c, days, run) {
       ${run.count >= 2 ? '<div class="note">The last two sessions were missed. A minimum session counts in full.</div>' : ''}
       <div class="tear"></div>
       <div class="pair">
-        <button type="button" class="btn primary" data-act="mark-today" data-type="done">Mark done</button>
-        <button type="button" class="btn" data-act="mark-today" data-type="min">Minimum</button>
+        <button type="button" class="btn primary" data-act="start-workout">Start session</button>
+        <button type="button" class="btn" data-act="start-workout" data-minimum="true">Minimum</button>
       </div>
       <div class="small muted">A missed day never doubles up. The same session just stays next in line.</div>
     </section>`;
@@ -248,7 +251,9 @@ actions['open-day'] = (el) => {
         <div class="card-title">${longDate(k)}</div>
         <div class="muted" style="font-size:14px">${status}</div>
       </div>
-      <button type="button" class="btn primary" data-act="set-day" data-type="done" data-day="${k}">Done</button>
+      ${d.state === 'done' || d.state === 'min' || d.isToday
+        ? `<button type="button" class="btn primary" data-act="start-workout" data-day="${k}">${d.isToday && d.state === 'planned' ? 'Start this session' : 'Open the logged sets'}</button>` : ''}
+      <button type="button" class="btn${d.state === 'done' || d.state === 'min' || d.isToday ? '' : ' primary'}" data-act="set-day" data-type="done" data-day="${k}">Mark done</button>
       <button type="button" class="btn" data-act="set-day" data-type="min" data-day="${k}">Did the minimum</button>
       ${planned ? `
         <button type="button" class="btn" data-act="set-day" data-type="missed" data-day="${k}">Missed</button>
