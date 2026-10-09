@@ -1,6 +1,20 @@
 import { plan as basePlan } from './plan.js';
 import * as rules from './rules.js';
 import { targets, today, log as sampleLog } from './sample.js';
+import { topics } from './guide.js';
+
+// Two looks to compare while the design is being chosen. Remembered on this device only.
+const LOOKS = { ticket: 'Ticket', scoreboard: 'Scoreboard' };
+function currentLook() {
+  const fromUrl = new URLSearchParams(location.search).get('look');
+  if (LOOKS[fromUrl]) return fromUrl;
+  try { return LOOKS[localStorage.getItem('look')] ? localStorage.getItem('look') : 'ticket'; } catch { return 'ticket'; }
+}
+function setLook(look) {
+  document.documentElement.dataset.look = look;
+  try { localStorage.setItem('look', look); } catch { /* private mode: just not remembered */ }
+}
+document.documentElement.dataset.look = currentLook();
 
 // Held in memory for now. Core Tracker moves this to Firestore.
 const state = {
@@ -25,7 +39,9 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const STATE_WORD = { done: 'done', min: 'minimum done', missed: 'missed', planned: 'planned', rest: 'rest day' };
 const TICK = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 const SETTINGS = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>';
-const CHEVRON = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+const CHEVRON_RIGHT = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+const BACK = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>';
+const CHEVRON ='<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
 // ?today=2026-11-03 previews another date, to check how the plan re-flows.
 const todayKey = () =>
@@ -43,7 +59,7 @@ function header(key, title) {
         <h1>${title}</h1>
       </div>
       <div class="head-side">
-        ${phase ? `<span class="pill">${phase.name}</span>` : ''}
+        ${phase ? `<a class="pill" href="#guide" aria-label="${phase.name}, open the guide">${phase.name}${CHEVRON_RIGHT}</a>` : ''}
         <a class="icon-btn" href="#settings" aria-label="Settings">${SETTINGS}</a>
       </div>
     </header>`;
@@ -135,12 +151,20 @@ function nextSession(days, key, run) {
     ? `Next up: ${sessionOf(next).name} on ${fmt(next.key, { weekday: 'long' })}.`
     : 'That was the last session in the plan.';
 
+  // Session number in the whole plan, counted from the sessions actually done.
+  const doneBefore = days.filter((d) => d.key < key && (d.state === 'done' || d.state === 'min')).length;
+  const no = (n) => `No. ${String(n).padStart(2, '0')}`;
+
   if (trained) {
     return `
-      <section class="card">
-        <div class="eyebrow">Done today${todayDay.state === 'min' ? ', minimum session' : ''}</div>
+      <section class="card ticket">
+        <div class="ticket-top">
+          <span class="eyebrow">Done today${todayDay.state === 'min' ? ', minimum' : ''}</span>
+          <span class="ticket-no">${no(doneBefore + 1)}</span>
+        </div>
         <div class="session-name">${sessionOf(todayDay).name}</div>
         <div class="muted" style="font-size:14px">${nextLine}</div>
+        <div class="tear"></div>
         <button type="button" class="btn" data-act="clear-today">Undo</button>
       </section>`;
   }
@@ -148,14 +172,22 @@ function nextSession(days, key, run) {
   const s = sessionOf(next);
   const when = next.key === key ? 'today' : fmt(next.key, { weekday: 'long' });
   return `
-    <section class="card">
-      <div class="eyebrow">Next session, ${when}</div>
+    <section class="card ticket">
+      <div class="ticket-top">
+        <span class="eyebrow">Next session, ${when}</span>
+        <span class="ticket-no">${no(doneBefore + 1)}</span>
+      </div>
       <div class="session-name">${s.name}</div>
-      <div class="muted" style="font-size:14px">${s.about}. ${s.exercises} exercises, about ${s.minutes} minutes.</div>
+      <div class="muted" style="font-size:14px">${s.about}.</div>
+      <div class="meta">
+        <div><b>${s.exercises}</b><span>Exercises</span></div>
+        <div><b>${s.minutes}</b><span>Minutes</span></div>
+      </div>
       ${run.count >= 2 ? '<div class="note">The last two sessions were missed. A minimum session counts in full.</div>' : ''}
+      <div class="tear"></div>
       <div class="pair">
         <button type="button" class="btn primary" data-act="mark-today" data-type="done">Mark done</button>
-        <button type="button" class="btn" data-act="mark-today" data-type="min">Did the minimum</button>
+        <button type="button" class="btn" data-act="mark-today" data-type="min">Minimum</button>
       </div>
       <div class="small muted">A missed day never doubles up. The same session just stays next in line.</div>
     </section>`;
@@ -164,7 +196,7 @@ function nextSession(days, key, run) {
 function macro(name, key, cls = '') {
   return `
     <div class="macro">
-      <div class="row"><span>${name}</span><span class="muted">${num(today[key])} of ${num(targets[key])} g</span></div>
+      <div class="row"><span>${name}</span><span class="muted"><b>${num(today[key])}</b> of ${num(targets[key])} g</span></div>
       <div class="bar ${cls}"><i style="width:${pct(today[key], targets[key])}%"></i></div>
     </div>`;
 }
@@ -178,7 +210,7 @@ function calories() {
       <div><span class="big">${num(today.kcal)}</span><span class="muted"> of ${num(targets.kcal)} kcal</span></div>
       <div class="bar tall"><i style="width:${pct(today.kcal, targets.kcal)}%"></i></div>
       <div class="macros">
-        ${macro('Protein', 'protein')}
+        ${macro('Protein', 'protein', 'protein')}
         ${macro('Carbs', 'carbs', 'carbs')}
         ${macro('Fat', 'fat', 'fat')}
       </div>
@@ -197,27 +229,27 @@ function smallCards(key) {
       <section class="card mini">
         <span class="card-title">Steps</span>
         <span class="big">${num(today.steps)}</span>
-        <span class="small muted">of ${num(steps)} today</span>
+        <span class="small muted sub">of ${num(steps)} today</span>
         <div class="bar"><i style="width:${pct(today.steps, steps)}%"></i></div>
         <button type="button" class="btn compact">Add steps</button>
       </section>
       <section class="card mini">
         <span class="card-title">Water</span>
         <span class="big">${litres(today.waterMl)} L</span>
-        <span class="small muted">of ${litres(targets.waterMl)} L today</span>
+        <span class="small muted sub">of ${litres(targets.waterMl)} L today</span>
         <div class="bar carbs"><i style="width:${pct(today.waterMl, targets.waterMl)}%"></i></div>
         <button type="button" class="btn compact">+250 ml</button>
       </section>
       <section class="card mini">
         <span class="card-title">Weight</span>
         <span class="big ${today.weightKg ? '' : 'muted'}">${today.weightKg ? `${today.weightKg} kg` : 'Not yet'}</span>
-        <span class="small muted">Morning, before food or water.</span>
+        <span class="small muted sub">Morning, before food or water.</span>
         <button type="button" class="btn compact">Add weight</button>
       </section>
       <section class="card mini">
         <span class="card-title">Supplements</span>
-        <label class="tick"><input type="checkbox">Creatine</label>
-        <label class="tick"><input type="checkbox">Vitamin D</label>
+        <div class="ticks"><label class="tick"><input type="checkbox">Creatine</label>
+        <label class="tick"><input type="checkbox">Vitamin D</label></div>
       </section>
     </div>`;
 }
@@ -228,12 +260,53 @@ function renderToday(key) {
   view.innerHTML =
     header(key, 'Today') + weekCard(days, key) + gapOffer(run) + nextSession(days, key, run) +
     calories() + smallCards(key) +
-    '<div class="status">Sample numbers. Nothing is saved yet.</div>';
+    '<div class="status">Sample numbers. Nothing is saved yet.</div>' + lookSwitch();
+}
+
+// Temporary: removed once one look is chosen.
+function lookSwitch() {
+  const now = document.documentElement.dataset.look;
+  return `<div class="looks" role="group" aria-label="Compare the two looks">
+    ${Object.entries(LOOKS).map(([id, name]) => `<button type="button" data-look-set="${id}" aria-pressed="${id === now}">${name}</button>`).join('')}
+  </div>`;
 }
 
 function renderPlaceholder(key, title) {
   view.innerHTML = header(key, title) +
-    '<section class="card"><div class="muted">Not built yet. Only the Today screen exists so far.</div></section>';
+    '<section class="card"><div class="muted">Not built yet. Only the Today screen and the guide exist so far.</div></section>' +
+    (title === 'Settings' ? `<a class="btn" href="#guide">Open the guide</a>${lookSwitch()}` : '');
+}
+
+const topic = (title, body, extra = '', open = false) => `
+  <details class="topic"${open ? ' open' : ''}>
+    <summary><span>${title}${extra}</span>${CHEVRON}</summary>
+    <div class="topic-body">${body}</div>
+  </details>`;
+
+function renderGuide(key) {
+  const current = rules.phaseFor(key, state.plan.phases);
+  const phases = state.plan.phases.map((p) => topic(
+    p.name,
+    `<p>${p.why}</p>
+     <dl>
+       <dt>Sets</dt><dd>${p.sets}</dd>
+       <dt>Effort</dt><dd>${p.effort}</dd>
+       <dt>Food</dt><dd>${p.food}</dd>
+     </dl>`,
+    `${p === current ? '<span class="here">You are here</span>' : ''}<span class="when">${shortDate(p.start)} to ${p.end ? shortDate(p.end) : 'goal'}</span>`,
+    p === current,
+  )).join('');
+  const rest = topics.map((g) =>
+    `<div class="guide-group">${g.group}</div>` + g.items.map((t) => topic(t.title, t.body)).join('')).join('');
+  view.innerHTML = `
+    <header class="head">
+      <div>
+        <div class="date">How the plan works</div>
+        <h1>Guide</h1>
+      </div>
+      <a class="icon-btn" href="#today" aria-label="Back to Today">${BACK}</a>
+    </header>
+    <div class="guide-group">The phases</div>${phases}${rest}`;
 }
 
 // The sheet for marking one day.
@@ -275,20 +348,31 @@ const TITLES = { workout: 'Workout', food: 'Food', progress: 'Progress', setting
 function render(toTop = true) {
   const tab = location.hash.slice(1) || 'today';
   const key = todayKey();
-  if (TITLES[tab]) renderPlaceholder(key, TITLES[tab]);
+  if (tab === 'guide') renderGuide(key);
+  else if (TITLES[tab]) renderPlaceholder(key, TITLES[tab]);
   else renderToday(key);
-  for (const a of document.querySelectorAll('.tabs a')) {
-    if (a.dataset.tab === (TITLES[tab] ? tab : 'today')) a.setAttribute('aria-current', 'page');
-    else a.removeAttribute('aria-current');
-  }
+
+  // Guide and Settings are not tabs, so nothing is lit for them.
+  const active = tab === 'guide' || tab === 'settings' ? null : TITLES[tab] ? tab : 'today';
+  const tabs = document.querySelector('.tabs');
+  [...tabs.querySelectorAll('a')].forEach((a, i) => {
+    if (a.dataset.tab === active) {
+      a.setAttribute('aria-current', 'page');
+      tabs.style.setProperty('--i', i);
+    } else a.removeAttribute('aria-current');
+  });
+  tabs.classList.toggle('none', !active);
   if (toTop) scrollTo(0, 0);
 }
 
 document.addEventListener('click', (e) => {
-  const el = e.target.closest('[data-act], [data-set], [data-day]');
+  const el = e.target.closest('[data-act], [data-set], [data-day], [data-look-set]');
   if (!el) return;
   const key = todayKey();
-  if (el.dataset.set) {
+  if (el.dataset.lookSet) {
+    setLook(el.dataset.lookSet);
+    render(false);
+  } else if (el.dataset.set) {
     sheet.close();
     setEntry(el.dataset.day, el.dataset.set, el.dataset.reason);
   } else if (el.dataset.day) {

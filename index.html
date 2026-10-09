@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en-GB">
+<html lang="en-GB" data-look="ticket">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0F1210">
+<meta name="theme-color" content="#0A0A0B">
 <meta name="color-scheme" content="dark">
 <title>Daily log</title>
 <link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
@@ -15,14 +15,15 @@
 <dialog id="sheet" class="sheet" aria-label="Mark this day"></dialog>
 
 <nav class="tabs" aria-label="Main">
-  <a href="#today" data-tab="today">
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>Today</a>
-  <a href="#workout" data-tab="workout">
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11"/></svg>Workout</a>
-  <a href="#food" data-tab="food">
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16a8 8 0 0 1-16 0z"/><path d="M9 7c0-1.5 1-1.5 1-3M14 7c0-1.5 1-1.5 1-3"/></svg>Food</a>
-  <a href="#progress" data-tab="progress">
-    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/><path d="M15 6h5v5"/></svg>Progress</a>
+  <span class="tab-glow" aria-hidden="true"></span>
+  <a href="#today" data-tab="today" aria-label="Today">
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg><span>Today</span></a>
+  <a href="#workout" data-tab="workout" aria-label="Workout">
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 8v8M17.5 8v8M3.5 10v4M20.5 10v4M6.5 12h11"/></svg><span>Workout</span></a>
+  <a href="#food" data-tab="food" aria-label="Food">
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11h16a8 8 0 0 1-16 0z"/><path d="M9 7c0-1.5 1-1.5 1-3M14 7c0-1.5 1-1.5 1-3"/></svg><span>Food</span></a>
+  <a href="#progress" data-tab="progress" aria-label="Progress">
+    <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/><path d="M15 6h5v5"/></svg><span>Progress</span></a>
 </nav>
 
 <script type="module" src="js/app.js"></script>
