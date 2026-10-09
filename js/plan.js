@@ -9,6 +9,7 @@ export const plan = {
   weekStartDow: 4, // Thursday
 
   // load and rir drive the Workout screen: 'ramp' eases in, 'half' halves the sets.
+  // maintenance marks a phase with no deficit, where the weight plan line goes flat.
   // sets, effort, food and why are the words shown in the guide.
   phases: [
     {
@@ -40,7 +41,7 @@ export const plan = {
       why: 'The hardest block, with the highest weekly volume. Sleep and food matter most here.',
     },
     {
-      name: 'Diet break and deload', start: '2027-01-28', end: '2027-02-10', load: 'half', rir: [3, 4],
+      name: 'Diet break and deload', start: '2027-01-28', end: '2027-02-10', load: 'half', rir: [3, 4], maintenance: true,
       sets: 'About half the sets.',
       effort: '3 to 4 reps in reserve.',
       food: 'Maintenance calories. The extra comes mostly from carbs: roti, rice and fruit.',
@@ -69,4 +70,7 @@ export const plan = {
 
   // The dumbbells at the gym, lightest first. A dumbbell lift jumps to the next one up.
   dumbbells: [5, 7, 7.5, 8, 10, 12.5, 15, 17.5, 20],
+
+  // Progress photos: the first reminder, then every so many days.
+  photos: { first: '2026-10-22', everyDays: 14 },
 };

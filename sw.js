@@ -21,6 +21,7 @@ const SHELL = [
   'js/foods.js',
   'js/guide.js',
   'js/plan.js',
+  'js/progress.js',
   'js/pwa.js',
   'js/rules.js',
   'js/settings.js',

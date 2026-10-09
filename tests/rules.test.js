@@ -161,6 +161,54 @@ test('wentBackwards: two drops in a row', () => {
   assert.equal(r.wentBackwards([s(40, 9), s(40, 8)]), false); // needs three sessions
 });
 
+// Builds a run of daily weigh-ins: weights('2026-10-08', [89.5, 89.2, ...])
+const weights = (from, list) => Object.fromEntries(list.map((w, i) => [r.addDays(from, i), w ? { weightKg: w } : {}]));
+
+test('weightAverage: needs three weigh-ins in the last seven days', () => {
+  const days = weights('2026-10-08', [89.5, 0, 89.1, 0, 0, 88.9, 0]);
+  assert.equal(r.weightAverage(days, '2026-10-14'), 89.2);
+  assert.equal(r.weightAverage(days, '2026-10-09'), null); // one weigh-in so far
+  assert.equal(r.weightAverage({}, '2026-10-14'), null);
+});
+
+test('planWeight: straight line to the goal, flat through the diet break', () => {
+  const at = (k) => r.planWeight(k, plan, 90, 76);
+  assert.equal(at('2026-10-08'), 90);
+  assert.equal(at(plan.end), 76);
+  assert.equal(at('2027-06-01'), 76); // never below the goal
+  assert.equal(at('2027-01-27'), at('2027-02-10')); // flat across the break
+  assert.ok(at('2027-02-11') < at('2027-02-10'));
+  const perWeek = at('2026-11-01') - at('2026-11-08');
+  assert.ok(perWeek > 0.6 && perWeek < 0.8, `loses ${perWeek} kg a week`);
+});
+
+test('stallCheck: needs data, on track, too fast, stalled, recomposing', () => {
+  const run = (list, extra = {}) => ({ ...weights('2026-10-08', list), ...extra });
+  const week = (w) => Array(7).fill(w);
+  const end = '2026-10-28'; // three full weeks from the start
+  assert.equal(r.stallCheck(run(week(89)), '2026-10-14', plan.start).status, 'need-data');
+  assert.equal(r.stallCheck(run([...week(89), ...week(88.4), ...week(87.7)]), end, plan.start).status, 'ok');
+  assert.equal(r.stallCheck(run([...week(89), ...week(88.4), ...week(87.2)]), end, plan.start).status, 'fast');
+  // a big first-week drop is water, not a warning
+  assert.equal(r.stallCheck(run([...week(89), ...week(87.6)]), '2026-10-21', plan.start).status, 'need-data');
+  const flat = [...week(88), ...week(88), ...week(88)];
+  assert.deepEqual(r.stallCheck(run(flat), end, plan.start), { status: 'stall', drop: 0, waistKnown: false });
+  const waistSame = { '2026-10-11': { weightKg: 88, waistCm: 96 }, '2026-10-25': { weightKg: 88, waistCm: 96 } };
+  assert.equal(r.stallCheck(run(flat, waistSame), end, plan.start).status, 'stall');
+  const waistDown = { '2026-10-11': { weightKg: 88, waistCm: 96 }, '2026-10-25': { weightKg: 88, waistCm: 95 } };
+  assert.equal(r.stallCheck(run(flat, waistDown), end, plan.start).status, 'recomp');
+});
+
+test('nextPhotoDay: 22 October, then every two weeks', () => {
+  assert.equal(r.nextPhotoDay('2026-10-10', plan.photos), '2026-10-22');
+  assert.equal(r.nextPhotoDay('2026-10-22', plan.photos), '2026-10-22');
+  assert.equal(r.nextPhotoDay('2026-10-23', plan.photos), '2026-11-05');
+});
+
+test('csvLine: quotes only what needs it', () => {
+  assert.equal(r.csvLine(['2026-10-10', 89.5, '', 'Roti, 2', 'say "hi"', null]), '2026-10-10,89.5,,"Roti, 2","say ""hi""",');
+});
+
 test('portion: by weight and by serving', () => {
   const strips = { byGrams: true, grams: 100, kcal: 200, protein: 16, carbs: 12, fat: 9, fibre: 0.8 };
   assert.deepEqual(r.portion(strips, 150), { kcal: 300, protein: 24, carbs: 18, fat: 13.5, fibre: 1.2 });

@@ -16,4 +16,5 @@
 - Food screen: preloaded and custom foods, search, amount by grams or servings, meals, edit and remove.
 - Home screen install: icon, manifest, offline app shell and an "Update available" prompt. Version shown in Settings.
 - Gym Logger: the four sessions with all 32 lifts, sets that follow the phase, set logging with last time's numbers, the jump rule, minimum session switch, rest timer, form video and alternative buttons, cardio log, and editing past sessions from the calendar.
-- Progress is a placeholder.
+- Insights: weight chart against the plan line (flat through the diet break), 7-day average, waist, sessions this week, stall check, last 7 days, a line per lift, phases, photo reminder.
+- Your data: "Copy my data for Claude", a JSON backup file and a CSV spreadsheet.

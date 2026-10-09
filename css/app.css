@@ -577,6 +577,36 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .rest.over .big { color: var(--protein); font-size: 22px; text-transform: uppercase; }
 @media (prefers-reduced-motion: reduce) { .switch::before, .switch i { transition: none; } }
 
+/* Progress */
+.big.huge { font-size: 72px; line-height: 0.9; }
+.chart { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { font: 400 10px 'Barlow', sans-serif; fill: var(--muted); stroke: none; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.plan-line { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 4; }
+.avg-line { stroke: var(--accent); stroke-width: 2; }
+.chart .dot { fill: var(--muted); stroke: none; }
+.today-line { stroke: var(--line-strong); stroke-width: 1; }
+.legend.left { justify-content: flex-start; margin: 0; font-size: 12px; }
+.swatch { width: 18px; height: 0; border-top: 2px solid var(--accent); }
+.swatch.dashed { border-top: 2px dashed var(--muted); }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--line-strong); }
+.dots i.on { background: var(--accent); border-color: var(--accent); }
+.phase-row { display: flex; align-items: center; gap: 12px; min-height: 48px; border-top: 1px solid var(--line); }
+.phase-row:first-child { border-top: 0; }
+.phase-row i { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--line-strong); }
+.phase-row span { flex: 1; color: var(--muted); }
+.phase-row small { font-size: 13px; color: var(--muted); }
+.phase-row.on i { background: var(--accent); border-color: var(--accent); }
+.phase-row.on span { color: var(--text); font-weight: 600; }
+.lift-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.lift-line:first-of-type { border-top: 0; }
+.lift-line span { display: flex; flex-direction: column; min-width: 0; }
+.lift-line b { font-weight: 600; }
+.lift-line small { font-size: 13px; color: var(--muted); }
+.lift-line svg { flex: none; }
+.copy-box { width: 100%; height: 50dvh; padding: 12px; border: 1px solid var(--line-strong); border-radius: 12px; background: rgb(255 255 255 / 0.04); color: var(--text); font: 13px/1.4 ui-monospace, monospace; }
+
 /* Update prompt: a glass strip just above the tab bar. */
 .update {
   position: fixed;

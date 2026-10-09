@@ -164,6 +164,77 @@ export const wentBackwards = (scores) => {
   return scores.length >= 3 && c < b && b < a;
 };
 
+// ----- Weight and progress -----
+
+const MIN_WEIGH_INS = 3;
+
+// Average of the weigh-ins in the 7 days ending on key, or null with fewer than three.
+// days: { 'YYYY-MM-DD': { weightKg } }
+export function weightAverage(days, key) {
+  const list = [];
+  for (let i = 0; i < 7; i++) {
+    const w = days[addDays(key, -i)]?.weightKg;
+    if (w) list.push(w);
+  }
+  return list.length >= MIN_WEIGH_INS ? round1(list.reduce((a, b) => a + b, 0) / list.length) : null;
+}
+
+// Where the plan says the weight should be on a day: a straight line from the starting
+// weight to the goal, going flat through any maintenance phase (the diet break).
+export function planWeight(key, plan, startKg, goalKg) {
+  const inBreak = (k) => plan.phases.some((p) => p.maintenance && k >= p.start && k <= (p.end ?? k));
+  let total = 0;
+  let passed = 0;
+  for (let k = addDays(plan.start, 1); k <= plan.end; k = addDays(k, 1)) {
+    if (inBreak(k)) continue;
+    total++;
+    if (k <= key) passed++;
+  }
+  return round1(startKg - (startKg - goalKg) * (total ? passed / total : 0));
+}
+
+const FLAT_KG = 0.1; // a weekly drop smaller than this counts as flat
+const FAST_KG = 1; // losing more than this a week is too fast
+const WAIST_CM = 0.5; // the smallest waist change worth trusting on a tape measure
+export const STALL_CUT_KCAL = 150;
+export const STALL_ADD_STEPS = 2000;
+
+// The stall check, from the last three weekly averages and the waist.
+//   days: { key: { weightKg, waistCm } }
+// Returns { status, drop } where status is one of:
+//   'need-data'  not enough weigh-ins for three weekly averages yet
+//   'fast'       losing more than 1 kg a week after the first two weeks: eat a little more
+//   'recomp'     scale flat for two weeks but the waist is shrinking: leave everything alone
+//   'stall'      scale flat for two weeks and the waist has not shrunk: cut a little or walk more
+//   'ok'         on track
+export function stallCheck(days, key, planStart) {
+  const [now, lastWeek, twoWeeksAgo] = [0, 7, 14].map((n) => weightAverage(days, addDays(key, -n)));
+  if (now === null || lastWeek === null) return { status: 'need-data' };
+  const drop = round1(lastWeek - now);
+  if (drop > FAST_KG && diffDays(key, planStart) >= 14) return { status: 'fast', drop };
+  if (twoWeeksAgo === null) return { status: 'need-data' };
+  const flat = drop < FLAT_KG && lastWeek > twoWeeksAgo - FLAT_KG;
+  if (!flat) return { status: 'ok', drop };
+
+  // The newest waist measurement against the newest one from at least two weeks before it.
+  const waists = Object.keys(days).filter((k) => k <= key && days[k].waistCm).sort();
+  const latest = waists.at(-1);
+  const earlier = latest && waists.filter((k) => diffDays(latest, k) >= 14).at(-1);
+  const shrunk = Boolean(earlier) && days[earlier].waistCm - days[latest].waistCm >= WAIST_CM;
+  return { status: shrunk ? 'recomp' : 'stall', drop, waistKnown: Boolean(earlier) };
+}
+
+// The next progress photo day on or after key. photos: { first, everyDays }
+export function nextPhotoDay(key, photos) {
+  if (key <= photos.first) return photos.first;
+  const since = diffDays(key, photos.first);
+  return addDays(photos.first, Math.ceil(since / photos.everyDays) * photos.everyDays);
+}
+
+// One line of a CSV file. Values with a comma, quote or line break are quoted.
+export const csvLine = (values) =>
+  values.map((v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''))).join(',');
+
 // ----- Food -----
 
 export const MACROS =['kcal', 'protein', 'carbs', 'fat', 'fibre'];

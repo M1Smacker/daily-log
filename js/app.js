@@ -9,6 +9,7 @@ import { todayBody } from './today.js';
 import { foodBody, filterChips } from './food.js';
 import { setupBody, settingsBody } from './settings.js';
 import { workoutView, refreshRest } from './workout.js';
+import { progressBody } from './progress.js';
 import { topics } from './guide.js';
 import { startPwa } from './pwa.js';
 
@@ -32,8 +33,6 @@ function frame(c, title, body, { sub, back = false, bare = false } = {}) {
       ${body}
     </div>`;
 }
-
-const notBuilt = '<section class="card"><div class="muted">Not built yet. This arrives in a later phase.</div></section>';
 
 const topic = (title, body, extra = '', open = false) => `
   <details class="topic"${open ? ' open' : ''}>
@@ -96,7 +95,7 @@ function render(nav = true) {
     const w = workoutView();
     frame(c, w.title, w.body, { sub: w.sub });
     refreshRest();
-  } else frame(c, 'Progress', notBuilt);
+  } else frame(c, 'Progress', progressBody(), { sub: `Since ${longDate(c.plan.start)}` });
 
   // Guide and Settings are not tabs, so nothing is lit for them.
   const index = TAB_ORDER.indexOf(tab);
