@@ -14,4 +14,5 @@
 - Page transitions: tabs slide in from the side they sit on, Guide and Settings rise up, the day sheet slides up.
 - Core Tracker, on this device: first-run setup, Settings (targets with a warning under the calorie and fat floors, day rollover), water, steps, weight and supplement logging, session marks that save.
 - Food screen: preloaded and custom foods, search, amount by grams or servings, meals, edit and remove.
+- Home screen install: icon, manifest, offline app shell and an "Update available" prompt. Version shown in Settings.
 - Workout and Progress are placeholders.

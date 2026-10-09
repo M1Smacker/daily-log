@@ -4,6 +4,7 @@ import * as rules from './rules.js';
 import * as store from './store.js';
 import { ctx } from './state.js';
 import { esc, forms, field, readNumber } from './ui.js';
+import { VERSION } from './version.js';
 
 function numbersForm(p, button) {
   const t = p?.targets ?? {};
@@ -53,7 +54,8 @@ export function settingsBody() {
       <a class="btn" href="#guide">Open the guide</a>
       <div class="small muted">Face and stomach fat cannot be targeted. Both slim down as overall body fat falls.</div>
       <div class="small muted">Nothing in this app is medical advice. If you feel dizzy, unusually tired or your study focus drops, eat at maintenance for a week and see a doctor.</div>
-    </section>`;
+    </section>
+    <div class="status plain">Version ${VERSION}</div>`;
 }
 
 forms.profile = (fd, form) => {

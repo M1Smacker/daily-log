@@ -9,6 +9,7 @@ import { todayBody } from './today.js';
 import { foodBody, filterChips } from './food.js';
 import { setupBody, settingsBody } from './settings.js';
 import { topics } from './guide.js';
+import { startPwa } from './pwa.js';
 
 // Every screen: glass controls that float at the top, then the page, which animates in.
 function frame(c, title, body, { sub, back = false, bare = false } = {}) {
@@ -138,3 +139,4 @@ sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.close(); 
 store.init(() => render(false));
 addEventListener('hashchange', () => render());
 render();
+startPwa();
