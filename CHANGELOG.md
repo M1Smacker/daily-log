@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.2
+
+- The barcode scanner can read a nutrition table too: point the camera at the table and tap "No barcode? Read the nutrition table". It opens Copy the label with the boxes filled in to check.
+- Settings accepts Google AI keys in any shape, and says which keys are saved after Save.
+
 ## 0.10.1
 
 - Barcode scanner: the fixed box is gone. An outline now forms around the barcode where the camera sees it, and turns lime when it has been read.

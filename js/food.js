@@ -516,6 +516,7 @@ actions.scan = () => {
       </div>
       <div class="scan-box"><video class="scan-video" playsinline muted data-scan-video></video><i data-scan-mark hidden></i></div>
       <div class="small muted" data-scan-msg>Starting the camera.</div>
+      ${ctx().plan.geminiKey ? '<button type="button" class="btn compact" data-act="scan-table">No barcode? Read the nutrition table</button>' : ''}
       <label class="field"><span>Or type the number</span>
         <input name="code" type="text" inputmode="numeric" autocomplete="off" maxlength="14">
       </label>
@@ -529,6 +530,44 @@ actions.scan = () => {
   startCamera();
 };
 
+
+// The same camera can read the nutrition table: one tap takes the picture that is on screen and
+// sends it to the label reader. It is a tap, not automatic, because every picture read counts
+// against the free daily limit.
+actions['scan-table'] = async (el) => {
+  const video = sheet.querySelector('[data-scan-video]');
+  const say = (text) => { const m = sheet.querySelector('[data-scan-msg]'); if (m) m.textContent = text; };
+  if (!video?.videoWidth) return say('The camera is not ready yet. Give it a second, then tap again.');
+  const typed = String(sheet.querySelector('[name="code"]')?.value ?? '').replace(/\s/g, '');
+  const shot = Object.assign(document.createElement('canvas'), { width: video.videoWidth, height: video.videoHeight });
+  shot.getContext('2d').drawImage(video, 0, 0);
+  video.pause(); // hold the picture still, so it is clear which one is being read
+  el.disabled = true;
+  say('Reading the table.');
+  let read = null;
+  let problem = '';
+  try {
+    read = await lookup.readLabel(shot.toDataURL('image/jpeg', 0.9).split(',')[1], ctx().plan.geminiKey);
+    if (!read.found) problem = 'No numbers could be read from that picture. Take a photo with the button above, closer and flatter, or type them.';
+  } catch (e) {
+    problem = e.message;
+  }
+  if (!sheet.open || !el.isConnected) return; // the sheet was closed while it was reading
+  stopCamera();
+  openLabel(read?.name ?? '', lookup.isBarcode(typed) ? typed : '');
+  const form = sheet.querySelector('[data-form="label"]');
+  const msg = form.querySelector('[data-label-msg]');
+  if (problem) {
+    msg.textContent = problem;
+    msg.className = 'small warn-ink';
+    return;
+  }
+  fillLabel(form, read);
+  msg.textContent = read.found < 4
+    ? 'Some boxes are filled in. The rest could not be read: type those from the pack, and check the others.'
+    : 'Filled in from the picture. Check every number against the pack before you save.';
+  msg.className = 'small ok-ink';
+};
 
 forms.barcode = async (fd, form) => {
   const c = ctx();
