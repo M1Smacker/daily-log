@@ -1,6 +1,8 @@
 // Small shared pieces for the screens: formatting, icons, the sheet, and the
 // tables that buttons and forms look their handlers up in.
 
+import { typedNumber } from './rules.js';
+
 export const view = document.getElementById('view');
 export const sheet = document.getElementById('sheet');
 
@@ -43,9 +45,4 @@ export const field = (name, label, value, { unit = '', decimal = true, required 
   </label>`;
 
 // Reads a number typed with a dot or a comma. Returns null when empty or not a number.
-export function readNumber(formData, name) {
-  const raw = String(formData.get(name) ?? '').trim().replace(',', '.');
-  if (raw === '') return null;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-}
+export const readNumber = (formData, name) => typedNumber(formData.get(name));

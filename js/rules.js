@@ -5,6 +5,9 @@ const DAY = 86400000;
 const toMs = (key) => Date.parse(key + 'T00:00:00Z');
 const toKey = (ms) => new Date(ms).toISOString().slice(0, 10);
 
+// True for a real calendar day written as 'YYYY-MM-DD'. 30 February is not one.
+export const isDay = (key) =>
+  typeof key === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(key) && !Number.isNaN(toMs(key)) && toKey(toMs(key)) === key;
 export const addDays = (key, n) => toKey(toMs(key) + n * DAY);
 export const diffDays = (a, b) => Math.round((toMs(a) - toMs(b)) / DAY);
 export const weekday = (key) => new Date(toMs(key)).getUTCDay(); // 0 is Sunday
@@ -96,6 +99,59 @@ export function shiftPhases(phases, key, n) {
     if (p.end) moved.end = addDays(p.end, n);
     return moved;
   });
+}
+
+// ----- Moving the phases -----
+// The phases follow one another with no gap, so their start dates say everything: each phase runs
+// until the day before the next one starts, and the last runs until the goal is reached.
+
+const MAX_PLAN_DAYS = 1100; // three years. Anything longer is a slip, and every screen walks the whole plan.
+
+// The first thing wrong with a set of start dates and a goal date, as a sentence, or null.
+// plan: { start, phases }.
+export function phaseDatesProblem(plan, starts, end) {
+  const { phases } = plan;
+  if (!Array.isArray(starts) || starts.length !== phases.length || !starts.every(isDay) || !isDay(end)) return 'Every date needs to be filled in.';
+  if (starts[0] !== plan.start) return `${phases[0].name} starts on the first day of the plan. That date stays where it is.`;
+  for (let i = 1; i < starts.length; i++) {
+    if (starts[i] <= starts[i - 1]) return `${phases[i].name} has to start after ${phases[i - 1].name} does.`;
+  }
+  if (end <= starts.at(-1)) return `The goal date has to be after ${phases.at(-1).name} starts.`;
+  if (diffDays(end, plan.start) > MAX_PLAN_DAYS) return 'The goal date is more than three years after the start. Check the year.';
+  return null;
+}
+
+export function movePhases(phases, starts) {
+  return phases.map(({ end, ...p }, i) => ({
+    ...p, start: starts[i], ...(i < phases.length - 1 ? { end: addDays(starts[i + 1], -1) } : {}),
+  }));
+}
+
+// The plan in use: the template from plan.js with your saved changes on top. Only the things the
+// app itself saves are taken, and only when they are the right kind of value, so damaged data or
+// an odd backup file can never break a screen. Anything else falls back to the template.
+export function planFrom(base, saved) {
+  const s = saved && typeof saved === 'object' ? saved : {};
+  const isMap = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+  const plan = { ...base };
+  if (Number.isInteger(s.rolloverHour) && s.rolloverHour >= 0 && s.rolloverHour <= 6) plan.rolloverHour = s.rolloverHour;
+  if (Array.isArray(s.dumbbells) && s.dumbbells.length >= 2 && s.dumbbells.every((n) => typeof n === 'number' && n > 0)) plan.dumbbells = s.dumbbells;
+  if (isMap(s.swaps)) {
+    plan.swaps = Object.fromEntries(Object.entries(s.swaps)
+      .filter(([, v]) => isMap(v) && typeof v.name === 'string' && typeof v.kind === 'string'));
+  }
+  if (isMap(s.gap)) plan.gap = s.gap;
+  if (Array.isArray(s.pushExtra)) plan.pushExtra = s.pushExtra.filter((m) => typeof m === 'string');
+  for (const k of ['usdaKey', 'geminiKey']) if (typeof s[k] === 'string' && s[k]) plan[k] = s[k];
+  if (s.finishAsked === true) plan.finishAsked = true;
+  // The dates are taken together or not at all.
+  const end = s.end ?? base.end;
+  const starts = s.phaseStarts ?? base.phases.map((p) => p.start);
+  if (!phaseDatesProblem(base, starts, end)) {
+    plan.end = end;
+    plan.phases = movePhases(base.phases, starts);
+  }
+  return plan;
 }
 
 // ----- Training -----
@@ -216,15 +272,24 @@ export const STALL_ADD_STEPS = 2000;
 //   'fast'       losing more than 1 kg a week after the first two weeks: eat a little more
 //   'recomp'     scale flat for two weeks but the waist is shrinking: leave everything alone
 //   'stall'      scale flat for two weeks and the waist has not shrunk: cut a little or walk more
+//   'break'      scale flat, but in or just after a maintenance phase, where flat is the point
 //   'ok'         on track
-export function stallCheck(days, key, planStart) {
+// phases: the plan's phases. A maintenance phase (the diet break) changes what the scale should do.
+export function stallCheck(days, key, planStart, phases = []) {
   const [now, lastWeek, twoWeeksAgo] = [0, 7, 14].map((n) => weightAverage(days, addDays(key, -n)));
   if (now === null || lastWeek === null) return { status: 'need-data' };
   const drop = round1(lastWeek - now);
-  if (drop > FAST_KG && diffDays(key, planStart) >= 14) return { status: 'fast', drop };
+  // The first two weeks of a deficit drop extra water: at the start, and again after a diet break.
+  const water = diffDays(key, planStart) < 14
+    || phases.some((p) => p.maintenance && p.end && key > p.end && diffDays(key, p.end) <= 14);
+  if (drop > FAST_KG && !water) return { status: 'fast', drop };
   if (twoWeeksAgo === null) return { status: 'need-data' };
   const flat = drop < FLAT_KG && lastWeek > twoWeeksAgo - FLAT_KG;
   if (!flat) return { status: 'ok', drop };
+  // The three weekly averages reach back 20 days. While any of them touches a maintenance phase,
+  // a flat scale is what the plan asked for, not a stall.
+  const from = addDays(key, -20);
+  if (phases.some((p) => p.maintenance && p.start <= key && (p.end ?? key) >= from)) return { status: 'break', drop };
 
   // The newest waist measurement against the newest one from at least two weeks before it.
   const waists = Object.keys(days).filter((k) => k <= key && days[k].waistCm).sort();
@@ -262,6 +327,17 @@ export function nextPhotoDay(key, photos) {
   return addDays(photos.first, Math.ceil(since / photos.everyDays) * photos.everyDays);
 }
 
+// A number as it was typed, with a dot or a comma for the decimals. Null when empty or not a number.
+// The app shows big numbers as 6,400, so one typed that way is six thousand four hundred, not 6.4.
+// Nothing in the app is measured to three decimal places, so there is no clash.
+export function typedNumber(text) {
+  const t = String(text ?? '').trim();
+  const raw = /^\d{1,3}(,\d{3})+$/.test(t) ? t.replace(/,/g, '') : t.replace(',', '.');
+  if (raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 // One line of a CSV file. Values with a comma, quote or line break are quoted.
 export const csvLine = (values) =>
   values.map((v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''))).join(',');
@@ -290,7 +366,8 @@ export function portionBy(food, amount, unit) {
 export const NUTRIENTS = ['kcal', 'protein', 'carbs', 'fat'];
 export function editEntry(e, amount, typed, meal) {
   if (NUTRIENTS.some((k) => typed[k] !== (e[k] ?? null))) return { ...e, ...typed, amount, meal };
-  return { ...e, ...portionBy(e, amount / e.amount, 'serving'), amount, meal };
+  // An entry with no usable amount of its own has nothing to scale from, so its numbers stay.
+  return { ...e, ...portionBy(e, e.amount > 0 ? amount / e.amount : 1, 'serving'), amount, meal };
 }
 
 // What a recipe gives per serving. items: logged-style entries with their macros.
@@ -340,6 +417,33 @@ export function totals(entries) {
   return sum;
 }
 
+// The plan's weeks up to today, newest first, for the Progress screen and the weekly check-in.
+// Food is averaged over the days it was logged. The weight is the 7-day average on the week's
+// last day (today, for the week still running), with its change from seven days before.
+//   sched: the days from schedule(). Returns [{ first, last, running, foodDays, kcal, protein,
+//   done, planned, weight, change }], with null where there is nothing to go on.
+export function weeks(days, sched, key, weekStartDow, planStart, count = 6) {
+  const out = [];
+  let first = addDays(key, -((weekday(key) - weekStartDow + 7) % 7));
+  for (; out.length < count && addDays(first, 6) >= planStart; first = addDays(first, -7)) {
+    const last = addDays(first, 6);
+    const upTo = last < key ? last : key;
+    const fed = [];
+    for (let k = first; k <= upTo; k = addDays(k, 1)) if (days[k]?.food?.length) fed.push(totals(days[k].food));
+    const avg = (m) => (fed.length ? Math.round(fed.reduce((a, t) => a + t[m], 0) / fed.length) : null);
+    const inWeek = sched.filter((d) => d.key >= first && d.key <= last);
+    const done = inWeek.filter((d) => d.state === 'done' || d.state === 'min').length;
+    const weight = weightAverage(days, upTo);
+    const before = weightAverage(days, addDays(upTo, -7));
+    out.push({
+      first, last, running: last >= key, foodDays: fed.length, kcal: avg('kcal'), protein: avg('protein'),
+      done, planned: Math.max(done, inWeek.filter((d) => d.session).length),
+      weight, change: weight === null || before === null ? null : round1(weight - before),
+    });
+  }
+  return out;
+}
+
 // Which meal a food most likely belongs to, from the local hour. Late night counts as dinner.
 export const mealFor = (hour) =>
   hour < 4 ? 'dinner' : hour < 11 ? 'breakfast' : hour < 16 ? 'lunch' : hour < 19 ? 'snack' : 'dinner';
@@ -386,6 +490,7 @@ export function paceWarnings(startKg, goalKg, plan) {
   for (let k = addDays(plan.start, 1); k <= plan.end; k = addDays(k, 1)) {
     if (!plan.phases.some((p) => p.maintenance && k >= p.start && k <= (p.end ?? k))) lossDays++;
   }
+  if (!lossDays) return ['The whole plan is a maintenance phase, so there are no days left to lose the weight in.'];
   const perWeek = round1(((startKg - goalKg) / lossDays) * 7);
   return perWeek > SAFE_KG_A_WEEK
     ? [`Reaching ${goalKg} kg by the end date means losing ${perWeek} kg a week. More than ${SAFE_KG_A_WEEK} kg a week costs muscle. A later date or a higher goal is safer.`]

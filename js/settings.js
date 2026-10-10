@@ -3,7 +3,8 @@
 import * as rules from './rules.js';
 import * as store from './store.js';
 import { ctx } from './state.js';
-import { esc, num, fmt, forms, actions, field, readNumber, openSheet, sheet } from './ui.js';
+import { esc, num, fmt, shortDate, forms, actions, field, readNumber, openSheet, sheet } from './ui.js';
+import { plan as basePlan } from './plan.js';
 import { VERSION } from './version.js';
 import { sessions } from './exercises.js';
 
@@ -37,6 +38,29 @@ export const setupBody = () => `
   <div class="muted" style="font-size:16px">A few numbers to set the app up. You can change any of them later in Settings.</div>
   ${numbersForm(null, 'Start')}`;
 
+// When each phase starts, and the goal date. The first phase is the plan's first day and stays put.
+function datesForm(c) {
+  const { phases, end } = c.plan;
+  const moved = end !== basePlan.end || phases.some((p, i) => p.start !== basePlan.phases[i].start);
+  const row = (name, label, value) => `
+    <label class="field date-row"><span>${label}</span>
+      <input name="${name}" type="date" value="${value}" required>
+    </label>`;
+  return `
+    <form class="card" data-form="dates" novalidate>
+      <span class="card-title">Plan dates</span>
+      <div class="muted" style="font-size:14px">The day each phase starts. A phase runs until the day before the next one starts. To move the diet break over your exams, change its date and the date of the phase after it.</div>
+      <div class="field date-row"><span>${phases[0].name}</span><span class="muted">${shortDate(phases[0].start)}, the plan's first day</span></div>
+      ${phases.slice(1).map((p, i) => row(`start${i + 1}`, p.name, p.start)).join('')}
+      <div class="rule"></div>
+      ${row('end', 'Goal date', end)}
+      <div class="small muted">The goal date is where the weight line ends. Training carries on past it until the goal is reached.</div>
+      <div class="form-error" role="alert" hidden></div>
+      <button class="btn">Save dates</button>
+      ${moved ? '<button type="button" class="btn quiet" data-act="reset-dates">Put the original dates back</button>' : ''}
+    </form>`;
+}
+
 export function settingsBody() {
   const c = ctx();
   return `
@@ -50,6 +74,7 @@ export function settingsBody() {
       </label>
       <button class="btn">Save</button>
     </form>
+    ${datesForm(c)}
     <form class="card" data-form="gym" novalidate>
       <span class="card-title">Your gym</span>
       <label class="field"><span>Dumbbells <i>kg</i></span>
@@ -228,7 +253,35 @@ forms.gym = (fd) => {
   const dumbbells = rules.readDumbbells(fd.get('dumbbells'));
   if (!dumbbells) return 'Type at least two weights as numbers, like 5, 7.5, 10.';
   store.setPlan({ dumbbells });
-  return { done: `Saved. USDA key: ${usdaKey ? 'yes' : 'none'}. Google AI key: ${geminiKey ? 'yes' : 'none'}.` };
+  return { done: 'Saved.' };
+};
+
+forms.dates = (fd, form) => {
+  const c = ctx();
+  const starts = c.plan.phases.map((p, i) => (i ? String(fd.get(`start${i}`)) : c.plan.start));
+  const end = String(fd.get('end'));
+  const problem = rules.phaseDatesProblem(c.plan, starts, end);
+  if (problem) return problem;
+  // A longer diet break or an earlier goal date makes the loss faster. Warn once, as the numbers
+  // form does, then let a second tap save it. A warning the plan already had is not repeated.
+  const pace = (plan) => rules.paceWarnings(c.profile.startKg, c.profile.goalKg, plan).join(' ');
+  const seen = pace({ ...c.plan, end, phases: rules.movePhases(c.plan.phases, starts) });
+  if (seen && seen !== pace(c.plan) && form.dataset.warned !== seen) {
+    form.dataset.warned = seen;
+    return `${esc(seen)}<br>Tap Save dates again to keep these dates, or change them.`;
+  }
+  store.setPlan({ phaseStarts: starts, end });
+  return { done: 'Saved. The calendar, the weight line and the workouts follow these dates now.' };
+};
+
+// Two taps, so a slip does not undo dates that were set on purpose.
+actions['reset-dates'] = (el) => {
+  if (el.dataset.sure !== '1') {
+    el.dataset.sure = '1';
+    el.textContent = 'Tap again to put them back';
+    return;
+  }
+  store.setPlan({ phaseStarts: null, end: null });
 };
 
 forms.lookups = (fd) => {
@@ -243,7 +296,7 @@ forms.lookups = (fd) => {
 
 forms.rollover = (fd) => {
   store.setPlan({ rolloverHour: Number(fd.get('hour')) });
-  return { done: `Saved. USDA key: ${usdaKey ? 'yes' : 'none'}. Google AI key: ${geminiKey ? 'yes' : 'none'}.` };
+  return { done: 'Saved.' };
 };
 
 forms['add-password'] = async (fd) => {

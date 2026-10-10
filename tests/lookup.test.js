@@ -62,3 +62,16 @@ test('fromLabel: kJ only, gaps stay empty, nonsense is dropped', () => {
   assert.equal(fromLabel(null).found, 0);
   assert.equal(fromLabel({ per: 30, fat: 31 }).fat, null); // more fat than the serving weighs
 });
+
+test('fromOff: a whole pack typed in as one serving is not believed, a can of drink is', () => {
+  // As Open Food Facts really has it: a pack of chapati with "1 chapati (450 g)" as the serving.
+  const chapati = fromOff({ product_name: 'Chapati', brands: 'Sara Cake', serving_quantity: 450, serving_quantity_unit: 'g', nutriments: { 'energy-kcal_100g': 92.6 } }, '6271026201175', '2026-10-10');
+  assert.deepEqual([chapati.amount, chapati.serving], [100, '100 g']);
+  const cola = fromOff({ product_name: 'Cola', quantity: '330 ml', product_quantity_unit: 'ml', serving_quantity: 330, serving_quantity_unit: 'ml', nutriments: { 'energy-kcal_100g': 42 } }, '5449000000996', '2026-10-10');
+  assert.deepEqual([cola.amount, cola.serving], [330, '100 ml']);
+  // The units alone are enough to know a drink, and a two-litre bottle is not one serving either.
+  const big = fromOff({ product_name: 'Juice', serving_quantity: 2000, serving_quantity_unit: 'ml', nutriments: { 'energy-kcal_100g': 45 } }, '12345678', '2026-10-10');
+  assert.deepEqual([big.amount, big.serving], [100, '100 ml']);
+  const bar = fromOff({ product_name: 'Bar', quantity: '45 g', serving_quantity: '45', nutriments: { 'energy-kcal_100g': 500 } }, '12345678', '2026-10-10');
+  assert.equal(bar.amount, 45);
+});

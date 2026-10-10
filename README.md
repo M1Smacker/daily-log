@@ -33,7 +33,7 @@ node --test
 
 ## Edit the plan
 
-Change `js/plan.js` for phase dates, training days or the step ramp, and `js/exercises.js` for lifts, sets, rep ranges and alternatives. Targets and personal numbers are never in this repository: they are typed into the app and stored with the user's own data.
+The phase dates and the goal date can be moved in the app, in Settings under Plan dates (saved with the user's data as start dates only). Change `js/plan.js` for the dates the plan starts with, training days or the step ramp, and `js/exercises.js` for lifts, sets, rep ranges and alternatives. Targets and personal numbers are never in this repository: they are typed into the app and stored with the user's own data.
 
 ## Release a change
 

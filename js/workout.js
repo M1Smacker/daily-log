@@ -39,7 +39,9 @@ function view() {
     session: sessionId, minimum: marked ? mark === 'min' : Boolean(ui.wantMinimum), finished: marked,
     rirLo: rules.targetRir(phase, key)[0], half: phase?.load === 'half', lifts: {},
   };
-  const all = withSwaps(sessions[sessionId], c.plan.swaps);
+  // A day that was logged before a lift was swapped keeps showing the lift it was done with.
+  const all = withSwaps(sessions[sessionId], c.plan.swaps)
+    .map((ex, i) => (ex.base && logged(w.lifts?.[ex.base]) && !w.lifts?.[ex.id] ? sessions[sessionId][i] : ex));
   const lifts = (w.minimum ? all.slice(0, rules.MIN_EXERCISES) : all).map((ex, i) => {
     const last = lastTime(c, ex.id, key);
     let p = rules.progression(ex, last, c.plan.dumbbells);

@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.11.0
+
+New:
+
+- Settings, Plan dates: move the day each phase starts, and the goal date. This is how the diet break is moved over an exam fortnight. A pace of more than 1 kg a week is warned about once before it saves, and the original dates can be put back.
+- Progress, Week by week: one line per plan week with average calories and protein, sessions done, and how far the 7-day weight average moved. The same lines are in "Copy my data for Claude".
+- A scanned product no longer starts at the weight of the whole pack when Open Food Facts has that as its serving. Drinks are in ml everywhere, and Copy the label can be set to ml.
+- A built-in food that was removed can be brought back, from the bottom of My foods.
+
+Fixed, data safety:
+
+- Reopening the app while a save was still waiting to sync (closed while offline) could start with the days empty, and the next thing logged would then replace the real list. The waiting saves are now loaded with everything else.
+- An old device-only copy of the data could be uploaded over the account when the app started with no connection on a device with nothing saved yet. It now waits for the server's answer, and only fills an account that is completely empty.
+- On a new device with no connection, the setup screen could show for an account that already had a profile. It now waits.
+- Food is added and removed in the database one entry at a time, not as the whole list, so two devices logging at once, or one that was offline, cannot drop each other's entries.
+- A damaged or odd saved plan (from a bad sync or an edited backup file) could stop every screen from opening. Only values of the right kind are taken now.
+- Restoring a backup while offline did nothing visible and then went through by itself later. It is refused until there is a connection.
+- The daily backup could be started several times before the first had landed. When the data outgrows a backup, the app now says so, where before it skipped the backup without a word.
+
+Fixed, everything else:
+
+- Settings: Save on the day rollover and on the dumbbell list saved, then crashed before saying so.
+- The stall check called the diet break a stall and said to cut calories, and could call the water lost just after it "too fast". It now knows a flat scale is the point of the break.
+- The amount box: an empty or impossible amount logged the last good amount instead. Add is now off until the box holds a real amount.
+- A number typed the way the app shows it, like 6,400 steps, was read as 6.4.
+- Removing a food while picking an ingredient threw away the recipe being built.
+- A food with unknown protein, carbs or fat could not be renamed without typing a made-up zero. Editing a built-in food reset its usual number of servings.
+- A zero-calorie product could not be saved from its label.
+- On an earlier day, Recent now means your recent foods, the entry sheet says which day it removes from, and a looked-up food is dated today.
+- The camera could be left running if the scanner was closed and reopened quickly.
+- A past session opened after a lift was swapped showed the new lift, blank. It shows the lift that was done.
+- "Copy my data for Claude" listed sheets that were opened but never trained as sessions, and showed swapped lifts by their code name.
+- The "Added" line left an empty gap after it faded.
+- A form that hits a fault now says so, and no longer just sits there.
+- A refused save no longer claims that nothing was lost.
+
 ## 0.10.6
 
 - Tap any logged food, in any meal, to fill in or correct its calories, protein, carbs and fat. Useful for a Quick add that went in with calories only.

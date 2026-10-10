@@ -30,9 +30,10 @@ let stop = [];
 //   cloud    a Firebase config exists
 //   ready    data has loaded (always true on a device-only setup)
 //   user     { uid, hasPassword } when signed in. hasPassword: an email and password can be used too
+//   confirmed  the server itself has answered about the profile, so "no profile" can be believed
 //   pending  some writes are saved on the phone but not yet on the server
 //   error    a plain message when something went wrong
-export const account = { cloud: Boolean(firebaseConfig), ready: !firebaseConfig, user: null, pending: false, error: null };
+export const account = { cloud: Boolean(firebaseConfig), ready: !firebaseConfig, user: null, confirmed: false, pending: false, error: null };
 // Called when only the sync status changed, so the screen does not need a full redraw.
 export const hooks = { status: () => {} };
 
@@ -153,6 +154,7 @@ function onUser(user) {
   data = empty();
   account.user = user ? { uid: user.uid, hasPassword: user.providerData.some((p) => p.providerId === 'password') } : null;
   account.pending = false;
+  account.confirmed = false;
   account.ready = !user;
   if (!user) return onChange();
 
@@ -163,21 +165,28 @@ function onUser(user) {
   let daysFromServer = false;
   const apply = (name, value, meta) => {
     if (name === 'days' && !meta.fromCache) daysFromServer = true;
+    // An account is only believed to be empty once the server has said so. Offline or on a slow
+    // line, a profile that is simply not on this phone yet must not start the setup screen, or
+    // an upload of what an older copy of the app left on this device.
+    const confirmedNow = name === 'profile' && !meta.fromCache && !account.confirmed;
+    if (confirmedNow) account.confirmed = true;
     pending[name] = meta.hasPendingWrites;
     account.pending = Object.values(pending).some(Boolean);
     const first = !loaded[name];
     loaded[name] = true;
     // While our own writes are still on their way, memory is already right: leave it alone.
-    const changed = !meta.hasPendingWrites && stable(data[name]) !== stable(value);
+    // Not on the first load, though. Then memory is empty, and writes can still be waiting from
+    // the last time the app was open (closed while offline). What arrives already includes them.
+    const changed = (first || !meta.hasPendingWrites) && stable(data[name]) !== stable(value);
     if (changed) data[name] = value;
-    if (first && Object.keys(loaded).length === 4) {
-      account.ready = true;
-      uploadDeviceData();
-      if (daysFromServer) autoBackup();
-      return onChange();
-    }
-    if (account.ready && daysFromServer) autoBackup(); // does nothing after the first one each day
-    if (changed && account.ready) onChange();
+    const nowReady = first && Object.keys(loaded).length === 4;
+    if (nowReady) account.ready = true;
+    if (!account.ready) return hooks.status();
+    // Both wait for the server's own word: an upload only into an account the server says is
+    // empty, a backup only of days the server has sent.
+    const uploaded = account.confirmed && daysFromServer && uploadDeviceData();
+    if (daysFromServer) autoBackup(); // does nothing after the first one each day
+    if (changed || nowReady || confirmedNow || uploaded) onChange();
     else hooks.status();
   };
   const fail = () => { account.error = 'The database refused the request. The security rules may not be published yet.'; account.ready = true; onChange(); };
@@ -192,13 +201,16 @@ function onUser(user) {
 }
 
 // First login on a device that was already in use: carry its data up, once, if the account is empty.
+// Empty means nothing at all. A profile that could not be read, with days behind it, is not empty,
+// and uploading over it would replace those days.
 function uploadDeviceData() {
-  if (data.profile || !device.profile) return;
+  if (data.profile || !device.profile || Object.keys(data.days).length || Object.keys(data.foods).length) return false;
   data = structuredClone(device);
   write(['meta', 'profile'], data.profile);
   if (Object.keys(data.plan).length) write(['meta', 'plan'], data.plan);
   for (const [k, d] of Object.entries(data.days)) write(['days', k], d);
   for (const [id, food] of Object.entries(data.foods)) write(['foods', id], food);
+  return true;
 }
 
 // Saves one document. A null value deletes it. JSON round trip drops undefined, which Firestore rejects.
@@ -225,8 +237,10 @@ function write(path, value, fields) {
     if (fields) for (const k of fields) if (!(k in clean)) clean[k] = null;
     job = fields ? fb.f.setDoc(ref, clean, { mergeFields: fields }) : fb.f.setDoc(ref, clean);
   }
-  job.catch(() => { account.error = 'A save was refused by the database. Nothing was lost on this phone.'; hooks.status(); });
+  job.catch(refused);
 }
+// A refused save is taken back out of the phone's copy too, so the message must not promise it is safe.
+const refused = () => { account.error = 'The database refused the last save, so that change may not have been kept. Check that it is still there.'; hooks.status(); };
 
 export const get = () => data;
 export function setProfile(profile) {
@@ -244,6 +258,21 @@ export function setDay(key, patch, quiet = false) {
   data.days[key] = { ...data.days[key], ...patch };
   write(['days', key], firebaseConfig ? patch : data.days[key], Object.keys(patch));
   if (!quiet) onChange();
+}
+// Adds entries to a list kept on a day (the food log), or takes them out. In the cloud this is
+// sent as "add these" or "remove these", never as the whole list, so two devices logging at the
+// same time, or one that was offline, cannot wipe each other's entries.
+// To remove, pass the entries as they are in memory: the database matches them whole.
+export function changeList(key, field, items, remove = false) {
+  if (!items.length) return;
+  const now = data.days[key]?.[field] ?? [];
+  const ids = new Set(items.map((x) => x.id));
+  data.days[key] = { ...data.days[key], [field]: remove ? now.filter((x) => !ids.has(x.id)) : [...now, ...items] };
+  if (firebaseConfig && account.user) {
+    const change = (remove ? fb.f.arrayRemove : fb.f.arrayUnion)(...JSON.parse(JSON.stringify(items)));
+    fb.f.setDoc(fb.f.doc(fb.db, 'users', account.user.uid, 'days', key), { [field]: change }, { merge: true }).catch(refused);
+  } else write(['days', key], data.days[key]);
+  onChange();
 }
 export function setFood(id, food) {
   if (food) data.foods[id] = food;
@@ -319,12 +348,21 @@ const BACKUP_PREFIX = `${KEY}-backup-`;
 const dayStamp = (ms = Date.now()) => new Date(ms).toISOString().slice(0, 10);
 const backupDoc = (id) => fb.f.doc(fb.db, 'users', account.user.uid, 'backups', id);
 
+// ponytail: one copy is one database document, which holds about 1 MB. Months of logs fit. When
+// they stop fitting the copy is refused out loud (TOO_BIG), never skipped in silence. The fix
+// then is to split a copy across several documents.
+const TOO_BIG = 'Your data has outgrown the automatic daily backups, so they have stopped. Save a backup file from the Progress screen now and then instead.';
+let backupsOff = false; // set once a copy was too big, so it is not tried again on every sync
+let backingUp = false; // a copy is being saved right now
+
 async function saveBackup(id) {
   if (!data.profile || readOnly) return; // nothing worth keeping yet
   const json = JSON.stringify(data);
-  const copy = { id, at: new Date().toISOString(), days: Object.keys(data.days).length, bytes: json.length, json };
+  // Counted in bytes, not characters: Arabic letters in a food name take two bytes each.
+  const copy = { id, at: new Date().toISOString(), days: Object.keys(data.days).length, bytes: new TextEncoder().encode(json).length, json };
   if (firebaseConfig) {
-    if (!account.user || copy.bytes > MAX_BACKUP_BYTES) return;
+    if (!account.user) return;
+    if (copy.bytes > MAX_BACKUP_BYTES) throw new Error(TOO_BIG);
     await fb.f.setDoc(backupDoc(id), copy);
   } else {
     try { localStorage.setItem(BACKUP_PREFIX + id, JSON.stringify(copy)); } catch { /* full: the main data matters more */ }
@@ -335,7 +373,10 @@ function autoBackup() {
   const today = dayStamp();
   let last = null;
   try { last = localStorage.getItem(`${KEY}-last-auto-backup`); } catch { /* storage blocked */ }
-  if (last === today || !data.profile) return;
+  if (last === today || !data.profile || backupsOff || backingUp) return;
+  // One at a time. Several syncs can arrive before the first copy has landed, and offline it
+  // does not land at all: without this, each of them would queue another whole copy.
+  backingUp = true;
   saveBackup(today).then(() => {
     try { localStorage.setItem(`${KEY}-last-auto-backup`, today); } catch { /* storage blocked */ }
     // Drop copies that have aged out. Deleting one that is not there is harmless.
@@ -345,7 +386,14 @@ function autoBackup() {
       const dated = Object.keys(localStorage).filter((k) => k.startsWith(BACKUP_PREFIX) && isKey(k.slice(BACKUP_PREFIX.length))).sort();
       for (const k of dated.slice(0, -KEEP_ON_DEVICE)) localStorage.removeItem(k);
     }
-  }).catch(() => { /* a failed backup must never get in the way of using the app */ });
+  }).catch((e) => {
+    // A failed backup must never get in the way of using the app. One that can no longer be
+    // made at all is said once, in the sync line, because a safety net must not vanish quietly.
+    if (e?.message !== TOO_BIG) return;
+    backupsOff = true;
+    account.error = TOO_BIG;
+    hooks.status();
+  }).finally(() => { backingUp = false; });
 }
 
 // The copies that exist, newest first: [{ id, at, days, bytes, json }].
@@ -370,10 +418,17 @@ export async function restore(text) {
   const read = readBackup(text);
   if (read.error) return read;
   if (readOnly) return { error: 'Refresh the app to update it first.' };
+  // Offline, the database only queues the work: nothing would seem to happen, and then the
+  // restore would go through by itself whenever the connection came back.
+  if (firebaseConfig && !navigator.onLine) return { error: 'Restoring needs the internet. Go online, then try again.' };
   try {
     await saveBackup(BEFORE_RESTORE);
-  } catch {
-    return { error: 'Could not keep a copy of what is here now, so nothing was changed. Check your connection and try again.' };
+  } catch (e) {
+    if (e?.message !== TOO_BIG) return { error: 'Could not keep a copy of what is here now, so nothing was changed. Check your connection and try again.' };
+    // Too much for a copy in the database. A backup file saved today does the same job.
+    let exported = null;
+    try { exported = localStorage.getItem(`${KEY}-last-export`); } catch { /* storage blocked */ }
+    if (exported !== dayStamp()) return { error: 'There is too much here to keep a copy of first, so nothing was changed. Save a backup file from the Progress screen, then restore again.' };
   }
   const next = read.data;
   if (firebaseConfig) {
@@ -400,6 +455,9 @@ export async function restore(text) {
   }
   data = next;
   if (!firebaseConfig) write();
+  // What is here now may be small enough to back up again.
+  backupsOff = false;
+  if (account.error === TOO_BIG) account.error = null;
   onChange();
   return { ok: true };
 }

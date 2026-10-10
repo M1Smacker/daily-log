@@ -119,7 +119,8 @@ actions['finish-keep'] = () => store.setPlan({ finishAsked: true });
 actions['finish-use'] = (el) => {
   const c = ctx();
   const kcal = Number(el.dataset.kcal);
-  const carbs = Math.max(0, Math.round(c.targets.carbs - (c.targets.kcal - kcal) / 4));
+  // Never down to nothing: a carb target of zero would not load as a usable profile.
+  const carbs = Math.max(20, Math.round(c.targets.carbs - (c.targets.kcal - kcal) / 4));
   store.setProfile({ ...c.profile, targets: { ...c.targets, kcal, carbs } });
   store.setPlan({ finishAsked: true });
 };
@@ -245,7 +246,7 @@ function smallCards(c) {
 // The stall check lives on Progress. When it has something to say, Today points to it,
 // so a too-fast loss or a stall is not missed by someone who rarely opens that tab.
 function stallNudge(c) {
-  const s = rules.stallCheck(c.data.days, c.key, c.plan.start).status;
+  const s = rules.stallCheck(c.data.days, c.key, c.plan.start, c.plan.phases).status;
   const text = { fast: 'You are losing faster than the plan wants.', stall: 'Your weight has been flat for two weeks.' }[s];
   return text ? `<a class="note warn nudge" href="#progress"><b>Stall check</b>${text} See Progress for what to do.</a>` : '';
 }
@@ -323,7 +324,8 @@ for (const act of ['gap-push', 'gap-keep']) {
     const run = rules.missedRun(rules.schedule(c.plan, c.log, c.key), c.key);
     const patch = { gap: { firstKey: run.firstKey, offers: Math.floor(run.count / GAP_SESSIONS) } };
     if (act === 'gap-push') {
-      patch.phases = rules.shiftPhases(c.plan.phases, c.key, GAP_SHIFT_DAYS);
+      // Saved as dates only, the same way Settings saves them.
+      patch.phaseStarts = rules.shiftPhases(c.plan.phases, c.key, GAP_SHIFT_DAYS).map((p) => p.start);
       patch.end = rules.addDays(c.plan.end, GAP_SHIFT_DAYS);
     }
     store.setPlan(patch);

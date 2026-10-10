@@ -282,3 +282,52 @@ test('biggestGap: the macro furthest behind, or null', () => {
   assert.equal(r.biggestGap(targets, { protein: 60, carbs: 130, fat: 45 }), 'protein');
   assert.equal(r.biggestGap(targets, { protein: 150, carbs: 210, fat: 70 }), null);
 });
+
+test('stallCheck: a flat scale in or just after the diet break is not a stall', () => {
+  const week = (w) => Array(7).fill(w);
+  const flat = (end) => weights(r.addDays(end, -20), [...week(82), ...week(82), ...week(82)]);
+  const at = (end, phases) => r.stallCheck(flat(end), end, plan.start, phases).status;
+  assert.equal(at('2027-02-10', plan.phases), 'break'); // the last day of the break
+  assert.equal(at('2027-02-10'), 'stall'); // the same scale with no break is a stall
+  assert.equal(at('2027-02-24', plan.phases), 'break'); // the averages still reach into the break
+  assert.equal(at('2027-03-03', plan.phases), 'stall'); // three weeks clear of it
+  assert.equal(at('2026-12-20', plan.phases), 'stall'); // nowhere near it
+});
+
+test('stallCheck: the fast drop after the diet break is water, like the first two weeks', () => {
+  const week = (w) => Array(7).fill(w);
+  const drop = (end) => weights(r.addDays(end, -20), [...week(83), ...week(83), ...week(81.7)]);
+  assert.notEqual(r.stallCheck(drop('2027-02-17'), '2027-02-17', plan.start, plan.phases).status, 'fast');
+  assert.equal(r.stallCheck(drop('2027-03-03'), '2027-03-03', plan.start, plan.phases).status, 'fast');
+  // Losing that fast during the break itself still counts: that is eating too little.
+  assert.equal(r.stallCheck(drop('2027-02-08'), '2027-02-08', plan.start, plan.phases).status, 'fast');
+});
+
+test('weeks: one line per plan week, newest first, nothing before the plan started', () => {
+  const food = (kcal, protein) => ({ food: [{ kcal, protein }] });
+  const days = {
+    ...weights('2026-10-08', [90, 90, 90, 0, 0, 0, 0, 89, 89, 89]),
+  };
+  Object.assign(days['2026-10-08'], food(2000, 150));
+  Object.assign(days['2026-10-09'], food(2200, 160));
+  Object.assign(days['2026-10-15'], food(1900, 140));
+  const today = '2026-10-17'; // a Saturday, in the second week
+  const out = r.weeks(days, sched(today, { '2026-10-08': { type: 'done' }, '2026-10-10': { type: 'min' } }), today, plan.weekStartDow, plan.start);
+  assert.deepEqual(out, [
+    { first: '2026-10-15', last: '2026-10-21', running: true, foodDays: 1, kcal: 1900, protein: 140, done: 0, planned: 4, weight: 89, change: -1 },
+    { first: '2026-10-08', last: '2026-10-14', running: false, foodDays: 2, kcal: 2100, protein: 155, done: 2, planned: 4, weight: 90, change: null },
+  ]);
+  assert.deepEqual(r.weeks({}, sched('2026-10-01'), '2026-10-01', plan.weekStartDow, plan.start), []); // before the plan
+  assert.equal(r.weeks({}, sched('2027-03-01'), '2027-03-01', plan.weekStartDow, plan.start).length, 6); // capped
+});
+
+test('typedNumber: dots, decimal commas, and thousands the way the app shows them', () => {
+  assert.deepEqual(['82.4', '82,4', '6,400', '12,345,678', '6400', ' 7 ', '0'].map(r.typedNumber), [82.4, 82.4, 6400, 12345678, 6400, 7, 0]);
+  assert.deepEqual(['', '  ', 'abc', '-5', '1,2,3', null, undefined].map(r.typedNumber), [null, null, null, null, null, null, null]);
+});
+
+test('editEntry: an entry with no amount of its own keeps its numbers', () => {
+  const e = { id: 'a', name: 'Odd', meal: 'lunch', amount: 0, unit: 'serving', kcal: 200, protein: 10, carbs: 20, fat: 5, fibre: null };
+  const out = r.editEntry(e, 2, { kcal: 200, protein: 10, carbs: 20, fat: 5 }, 'lunch');
+  assert.deepEqual([out.kcal, out.protein, out.amount], [200, 10, 2]);
+});

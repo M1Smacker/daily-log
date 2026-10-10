@@ -45,7 +45,7 @@ export const plan = {
       sets: 'About half the sets.',
       effort: '3 to 4 reps in reserve.',
       food: 'Maintenance calories. The extra comes mostly from carbs: roti, rice and fruit.',
-      why: 'A mental and physical reset after months in a deficit. It can be moved to cover your heaviest exam fortnight.',
+      why: 'A mental and physical reset after months in a deficit. It can be moved to cover your heaviest exam fortnight: change its date in Settings, under Plan dates.',
     },
     {
       name: 'Finish phase', start: '2027-02-11', load: 'full', rir: [1, 3],

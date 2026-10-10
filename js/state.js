@@ -19,14 +19,12 @@ export const ui = {
 // Anything that is not a real date is ignored, so a mangled address cannot break the app.
 function previewDay() {
   const v = new URLSearchParams(location.search).get('today');
-  if (!v || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
-  const ms = Date.parse(`${v}T00:00:00Z`);
-  return Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 10) !== v ? null : v;
+  return rules.isDay(v) ? v : null;
 }
 
 export function ctx() {
   const data = store.get();
-  const plan = { ...basePlan, ...data.plan };
+  const plan = rules.planFrom(basePlan, data.plan);
   const key = previewDay() ?? rules.dayKey(new Date(), plan.rolloverHour, plan.utcOffsetHours);
   const log = {};
   for (const [k, d] of Object.entries(data.days)) if (d.session) log[k] = { ...d.session, id: d.workout?.session };

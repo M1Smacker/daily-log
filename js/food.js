@@ -36,8 +36,12 @@ const MAX_KCAL = 10000;
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const defaultMeal = (c) => rules.mealFor(rules.localHour(new Date(), c.plan.utcOffsetHours));
 const meal = (c) => (MEALS[ui.food.meal] ? ui.food.meal : defaultMeal(c));
+// A drink is saved per 100 ml, so its amounts are in ml. Everything else is in grams.
+// ponytail: read from the serving text ("100 ml"), so foods already saved need no change. If that
+// text is edited to something else the food shows g again. A saved flag would fix that, if it matters.
+const gUnit = (x) => (/^\s*[\d.,]+\s*ml\b/i.test(x?.serving ?? '') ? 'ml' : 'g');
 const amountText = (e) =>
-  e.unit === 'g' ? `${num(e.amount)} g` : !e.serving ? 'Typed in' : e.amount === 1 ? esc(e.serving) : `${e.amount} x ${esc(e.serving)}`;
+  e.unit === 'g' ? `${num(e.amount)} ${gUnit(e)}` : !e.serving ? 'Typed in' : e.amount === 1 ? esc(e.serving) : `${esc(e.amount)} x ${esc(e.serving)}`;
 // A number the food does not have is shown as unknown, never as zero.
 const grams = (v) => (v == null ? '?' : `${num(v)} g`);
 const protein = (p) => (p.protein == null ? 'protein not known' : `${num(p.protein)} g protein`);
@@ -117,7 +121,12 @@ function listHtml(c) {
     return (hits.length ? hits.map((f) => foodRow(f)).join('') : none('No saved food matches. Use New food below to add it.')) + lookupHtml(c, q);
   }
   const list = ui.food.picking && ['meals', 'recipes'].includes(ui.food.list) ? 'mine' : ui.food.list;
-  if (list === 'mine') return byName.map((f) => foodRow(f)).join('');
+  if (list === 'mine') {
+    // A built-in food that was removed is only hidden, so it can come back.
+    const gone = preloaded.filter((f) => c.data.foods[f.id]?.hidden).length;
+    return byName.map((f) => foodRow(f)).join('') + (gone
+      ? `<button type="button" class="link" data-act="unhide-foods">Bring back ${gone} built-in ${gone === 1 ? 'food' : 'foods'} you removed</button>` : '');
+  }
   if (list === 'recipes') {
     const recipes = byName.filter((f) => f.recipe);
     return recipes.length ? recipes.map((f) => foodRow(f)).join('')
@@ -135,7 +144,8 @@ function listHtml(c) {
         </div>`;
     }).join('') : none(`No earlier ${MEALS[meal(c)].toLowerCase()} in the last two weeks. Once you have logged one, it shows here to add again in one tap.`);
   }
-  const recent = rules.recentFoods(c.data.days, c.key)
+  // Recent means recent for you, counted back from the real today, whichever day is on screen.
+  const recent = rules.recentFoods(c.data.days, c.today)
     .map((r) => [c.foods.find((f) => f.id === r.foodId), r])
     .filter(([f, r]) => f && (r.unit !== 'g' || f.grams));
   return recent.length ? recent.map(([f, r]) => foodRow(f, r)).join('')
@@ -173,7 +183,7 @@ actions['usda-search'] = async () => {
   ui.food.found = { q, loading: true };
   repaintList();
   try {
-    ui.food.found = { q, foods: await lookup.searchUsda(q, c.plan.usdaKey, c.key) };
+    ui.food.found = { q, foods: await lookup.searchUsda(q, c.plan.usdaKey, c.today) };
   } catch (e) {
     ui.food.found = { q, error: e.message };
   }
@@ -261,9 +271,11 @@ document.addEventListener('input', (e) => {
     ui.food.search = e.target.value;
     repaintList();
   } else if (e.target.matches('[data-amount]')) {
+    if (!ui.food.pick) return;
     const n = Number(e.target.value.replace(',', '.'));
-    if (!ui.food.pick || !Number.isFinite(n) || n <= 0 || n > MAX_AMOUNT) return;
-    ui.food.pick.amount = n;
+    // An empty box, or one that is not a sane amount, counts as nothing and cannot be added,
+    // so what goes in the log is always what the box shows.
+    ui.food.pick.amount = Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT ? n : 0;
     paintPick();
   } else if (e.target.matches('[data-recipe]') && ui.food.recipe) {
     ui.food.recipe[e.target.dataset.recipe] = e.target.value;
@@ -288,6 +300,8 @@ function paintPick() {
   if (!f) return;
   const p = rules.portionBy(f, ui.food.pick.amount, ui.food.pick.unit);
   for (const el of sheet.querySelectorAll('[data-live]')) el.textContent = p[el.dataset.live] == null ? '?' : num(p[el.dataset.live]);
+  const add = sheet.querySelector('[data-act="add-food"]');
+  if (add) add.disabled = !(ui.food.pick.amount > 0);
 }
 
 function openPick() {
@@ -308,14 +322,14 @@ function openPick() {
       </div>
       ${units.length > 1 ? `
         <div class="seg n2" role="group" aria-label="Unit">
-          ${units.map((u) => `<button type="button" data-act="pick-unit" data-unit="${u}" aria-pressed="${u === unit}">${u === 'g' ? 'Grams' : 'Servings'}</button>`).join('')}
+          ${units.map((u) => `<button type="button" data-act="pick-unit" data-unit="${u}" aria-pressed="${u === unit}">${u !== 'g' ? 'Servings' : gUnit(f) === 'ml' ? 'Millilitres' : 'Grams'}</button>`).join('')}
         </div>` : ''}
       <div class="stepper">
         <span class="muted">${unit === 'g' ? 'Amount' : 'Servings'}</span>
         <div>
           <button type="button" class="btn compact narrow" data-act="step-amount" data-dir="-1" aria-label="Less">&minus;</button>
-          <input type="text" inputmode="decimal" value="${amount}" data-amount aria-label="${unit === 'g' ? 'Amount in grams' : 'Number of servings'}">
-          ${unit === 'g' ? '<span class="muted">g</span>' : ''}
+          <input type="text" inputmode="decimal" value="${amount}" data-amount aria-label="${unit === 'g' ? `Amount in ${gUnit(f)}` : 'Number of servings'}">
+          ${unit === 'g' ? `<span class="muted">${gUnit(f)}</span>` : ''}
           <button type="button" class="btn compact narrow" data-act="step-amount" data-dir="1" aria-label="More">+</button>
         </div>
       </div>
@@ -332,7 +346,7 @@ actions['pick-food'] = (el) => {
   const f = c.foods.find((x) => x.id === el.dataset.id);
   if (!f) return;
   // Start from the amount used last time, when there was one.
-  const last = rules.recentFoods(c.data.days, c.key).find((r) => r.foodId === f.id && (r.unit !== 'g' || f.grams));
+  const last = rules.recentFoods(c.data.days, c.today).find((r) => r.foodId === f.id && (r.unit !== 'g' || f.grams));
   const unit = last?.unit ?? unitsOf(f)[0];
   ui.food.pick = { id: f.id, unit, amount: last?.amount ?? startAmount(f, unit) };
   openPick();
@@ -360,7 +374,9 @@ function log(c, entries) {
     text: entries.length === 1 ? `${entries[0].name}, ${num(entries[0].kcal)} kcal` : `${entries.length} foods, ${num(rules.totals(entries).kcal)} kcal`,
     at: Date.now(),
   };
-  store.setDay(c.key, { food: [...(c.day.food ?? []), ...entries] });
+  store.changeList(c.key, 'food', entries);
+  // Take the line away once it has faded, so it leaves no empty gap behind.
+  setTimeout(() => { if (Date.now() - ui.food.added.at >= ADDED_SHOWS_MS) document.querySelector('.added')?.remove(); }, ADDED_SHOWS_MS);
 }
 
 actions['add-food'] = () => {
@@ -382,8 +398,14 @@ actions['add-food'] = () => {
 actions['quick-log'] = (el) => {
   const c = ctx();
   const f = c.foods.find((x) => x.id === el.dataset.id);
-  const last = rules.recentFoods(c.data.days, c.key).find((r) => r.foodId === el.dataset.id);
-  if (f && last) log(c, [entryFrom(f, last.amount, last.unit, meal(c))]);
+  const last = rules.recentFoods(c.data.days, c.today).find((r) => r.foodId === el.dataset.id);
+  if (f && last && (last.unit !== 'g' || f.grams)) log(c, [entryFrom(f, last.amount, last.unit, meal(c))]);
+};
+// A built-in food that was removed is brought back by dropping the mark that hides it.
+// Only those marks are touched: your own foods are never part of this.
+actions['unhide-foods'] = () => {
+  const { foods } = ctx().data;
+  for (const f of preloaded) if (foods[f.id]?.hidden) store.setFood(f.id, null);
 };
 actions['add-meal'] = (el) => {
   const c = ctx();
@@ -450,16 +472,21 @@ async function startCamera() {
   } catch {
     return say(`The scanner could not load. ${typeIt}`);
   }
+  let mine;
   try {
-    stream = await navigator.mediaDevices.getUserMedia(CAMERA);
+    mine = await navigator.mediaDevices.getUserMedia(CAMERA);
   } catch {
     return say(`The camera is blocked or missing. ${typeIt}`);
   }
-  if (!form.isConnected || !sheet.open) return stopCamera();
-  const mine = stream;
-  video.srcObject = stream;
+  // The sheet may have been closed, or closed and opened again, while the camera was starting.
+  // Then this camera is nobody's: switch it off, and leave alone the one that may be running now.
+  if (!form.isConnected || !sheet.open) return mine.getTracks().forEach((t) => t.stop());
+  stopCamera();
+  stream = mine;
+  video.srcObject = mine;
   await video.play().catch(() => {});
-  tuneCamera(stream.getVideoTracks()[0]);
+  if (stream !== mine) return; // closed while the picture was starting
+  tuneCamera(mine.getVideoTracks()[0]);
   say('Point the camera at the barcode and hold it back until it is sharp.');
 
   // Looks take turns: the middle band of the picture (less to search, so quicker), then the whole
@@ -595,7 +622,7 @@ forms.barcode = async (fd, form) => {
     const button = form.querySelector('button.primary');
     button.disabled = true;
     try {
-      f = await lookup.findBarcode(code, c.key);
+      f = await lookup.findBarcode(code, c.today);
     } catch (e) {
       return e.message;
     } finally {
@@ -634,7 +661,13 @@ function openLabel(name, code) {
       : '<div class="small muted">To fill this in from a photo of the label, add a free Google AI key in Settings.</div>'}
       <input type="hidden" name="barcode" value="${esc(code)}">
       ${textField('name', 'Name', name)}
-      ${field('per', 'The numbers are for', 100, { unit: 'g', hint: 'Most labels say per 100 g. If yours only says per serving, type the serving weight.' })}
+      <div class="field-grid">
+        ${field('per', 'The numbers are for', 100)}
+        <label class="field"><span>Measured in</span>
+          <select name="perUnit"><option value="g">g</option><option value="ml">ml, a drink</option></select>
+        </label>
+      </div>
+      <div class="small muted">Most labels say per 100 g, or per 100 ml for a drink. If yours only says per serving, type the serving weight.</div>
       <div class="field-grid">
         ${field('energy', 'Energy', '')}
         <label class="field"><span>Energy is in</span>
@@ -657,7 +690,7 @@ function openLabel(name, code) {
 
 // A photo of the label, made small enough to send quickly but still sharp enough to read.
 async function photoBase64(file) {
-  const img = await createImageBitmap(file);
+  const img = await createImageBitmap(file).catch(() => { throw new Error('That photo could not be opened. Take it again.'); });
   const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
   const canvas = Object.assign(document.createElement('canvas'), { width: Math.round(img.width * scale), height: Math.round(img.height * scale) });
   canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -699,8 +732,8 @@ forms.label = (fd, form) => {
   const name = String(fd.get('name')).trim();
   const n = Object.fromEntries(['per', 'energy', 'fat', 'satFat', 'carbs', 'sugar', 'fibre', 'protein', 'salt', 'amount'].map((k) => [k, readNumber(fd, k)]));
   if (!name) return 'Give it a name.';
-  if (!n.per || n.per > 2000) return 'Say how many grams the label numbers are for. It is usually 100.';
-  if (!n.energy || [n.fat, n.carbs, n.protein].includes(null)) return 'Energy, total fat, carbohydrate and protein all need a number. Use 0 if there is none.';
+  if (!n.per || n.per > 2000) return 'Say how much the label numbers are for. It is usually 100.';
+  if ([n.energy, n.fat, n.carbs, n.protein].includes(null)) return 'Energy, total fat, carbohydrate and protein all need a number. Use 0 if there is none.';
   const kcal = Math.round(fd.get('energyUnit') === 'kj' ? n.energy / 4.184 : n.energy);
   if (kcal > MAX_KCAL || Math.max(n.fat, n.carbs, n.protein) > n.per) return 'One of those numbers is too big for that weight. Check for a slip.';
   // Calories far from what the macros add up to usually mean a slip, or kJ typed as kcal.
@@ -712,7 +745,7 @@ forms.label = (fd, form) => {
   const id = `my-${newId()}`;
   const extra = Object.fromEntries(['sugar', 'satFat', 'salt'].filter((k) => n[k] !== null).map((k) => [k, n[k]]));
   const food = {
-    id, name, serving: `${n.per} g`, byGrams: true, grams: n.per, amount: n.amount && n.amount <= MAX_AMOUNT ? n.amount : n.per,
+    id, name, serving: `${n.per} ${fd.get('perUnit') === 'ml' ? 'ml' : 'g'}`, byGrams: true, grams: n.per, amount: n.amount && n.amount <= MAX_AMOUNT ? n.amount : n.per,
     kcal, protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre, source: form.dataset.scanned ? 'label' : 'own',
     ...(Object.keys(extra).length ? { extra } : {}),
   };
@@ -756,7 +789,8 @@ forms.quick = (fd) => {
 const NUTRIENTS = rules.NUTRIENTS;
 
 actions['open-entry'] = (el) => {
-  const e = (ctx().day.food ?? []).find((x) => x.id === el.dataset.id);
+  const c = ctx();
+  const e = (c.day.food ?? []).find((x) => x.id === el.dataset.id);
   if (!e) return;
   openSheet(`
     <form class="sheet-body" data-form="entry" data-id="${esc(e.id)}" novalidate>
@@ -764,7 +798,7 @@ actions['open-entry'] = (el) => {
         <div class="card-title">${esc(e.name)}</div>
         <div class="muted" style="font-size:14px">${num(e.kcal)} kcal, ${protein(e)}, ${grams(e.carbs)} carbs, ${grams(e.fat)} fat</div>
       </div>
-      ${field('amount', e.unit === 'g' ? 'Amount' : 'Servings', e.amount, { unit: e.unit === 'g' ? 'g' : '' })}
+      ${field('amount', e.unit === 'g' ? 'Amount' : 'Servings', e.amount, { unit: e.unit === 'g' ? gUnit(e) : '' })}
       <label class="field"><span>Meal</span>
         <select name="meal">${Object.entries(MEALS).map(([id, name]) => `<option value="${id}"${id === e.meal ? ' selected' : ''}>${name}</option>`).join('')}</select>
       </label>
@@ -776,9 +810,9 @@ actions['open-entry'] = (el) => {
         ${field('carbs', 'Carbs', e.carbs, { unit: 'g', required: false })}
         ${field('fat', 'Fat', e.fat, { unit: 'g', required: false })}
       </div>
-      <div class="small muted">Fill in or correct these for what you actually ate. Change only the amount and they scale by themselves. This changes today's entry, not the saved food.</div>
+      <div class="small muted">Fill in or correct these for what you actually ate. Change only the amount and they scale by themselves. This changes this one entry, not the saved food.</div>
       <button class="btn primary">Save</button>
-      <button type="button" class="btn" data-act="delete-entry" data-id="${esc(e.id)}">Remove from today</button>
+      <button type="button" class="btn" data-act="delete-entry" data-id="${esc(e.id)}">${c.key === c.today ? 'Remove from today' : 'Remove from this day'}</button>
       <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
     </form>`);
 };
@@ -786,7 +820,8 @@ actions['open-entry'] = (el) => {
 forms.entry = (fd, form) => {
   const c = ctx();
   const amount = readNumber(fd, 'amount');
-  if (!amount || amount > MAX_AMOUNT) return 'Type an amount above zero. That one looks too big to be right.';
+  if (!amount) return 'Type an amount above zero.';
+  if (amount > MAX_AMOUNT) return 'That amount looks too big to be right.';
   const typed = Object.fromEntries(NUTRIENTS.map((k) => [k, readNumber(fd, k)]));
   if (typed.kcal === null || typed.kcal > MAX_KCAL) return 'Calories need a number. Protein, carbs and fat can be left empty if you do not know them.';
   if (Math.max(typed.protein ?? 0, typed.carbs ?? 0, typed.fat ?? 0) > 1000) return 'One of those numbers is too big. Check for a slip.';
@@ -800,7 +835,7 @@ forms.entry = (fd, form) => {
 actions['delete-entry'] = (el) => {
   const c = ctx();
   sheet.close();
-  store.setDay(c.key, { food: (c.day.food ?? []).filter((e) => e.id !== el.dataset.id) });
+  store.changeList(c.key, 'food', (c.day.food ?? []).filter((e) => e.id === el.dataset.id), true);
 };
 
 // ----- Adding or editing a saved food -----
@@ -810,6 +845,8 @@ const textField = (name, label, value, hint = '') => `
     <input name="${name}" type="text" value="${esc(value ?? '')}" required maxlength="80" autocomplete="off">
     ${hint ? `<small>${hint}</small>` : ''}
   </label>`;
+
+const GAPS = ['protein', 'carbs', 'fat']; // the numbers a food can come without
 
 actions['edit-food'] = (el) => {
   const f = ctx().foods.find((x) => x.id === el.dataset.id) ?? {};
@@ -824,13 +861,12 @@ actions['edit-food'] = (el) => {
       ${textField('serving', 'One serving is', f.serving, 'For example "1 plate" or "100 g, from the pack".')}
       <div class="field-grid">
         ${field('kcal', 'Calories', f.kcal, { unit: 'kcal' })}
-        ${field('protein', 'Protein', f.protein, { unit: 'g' })}
-        ${field('carbs', 'Carbs', f.carbs, { unit: 'g' })}
-        ${field('fat', 'Fat', f.fat, { unit: 'g' })}
+        ${GAPS.map((k) => field(k, { protein: 'Protein', carbs: 'Carbs', fat: 'Fat' }[k], f[k], { unit: 'g', required: !f.id || f[k] != null })).join('')}
         ${field('fibre', 'Fibre', f.fibre, { unit: 'g', required: false })}
         ${field('grams', 'Grams in a serving', f.grams, { unit: 'g', required: false })}
       </div>
       <div class="small muted">Fill in the grams if you want to be able to log this food by weight.</div>
+      ${f.id && GAPS.some((k) => f[k] == null) ? '<div class="small muted">An empty box here is a number nobody gave for this food. It can stay empty: it shows as not known and adds nothing to your totals.</div>' : ''}
       <button class="btn primary">Save food</button>
       ${f.id ? `<button type="button" class="btn" data-act="delete-food" data-id="${esc(f.id)}">Remove this food</button>` : ''}
       <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
@@ -846,17 +882,20 @@ forms.food = (fd, form) => {
   const serving = String(fd.get('serving')).trim();
   const n = Object.fromEntries(['kcal', 'protein', 'carbs', 'fat', 'fibre', 'grams'].map((k) => [k, readNumber(fd, k)]));
   if (!name || !serving) return 'Give the food a name and say what one serving is.';
-  if ([n.kcal, n.protein, n.carbs, n.fat].includes(null)) return 'Calories, protein, carbs and fat all need a number. Use 0 if there is none.';
-  if (n.kcal > MAX_KCAL || Math.max(n.protein, n.carbs, n.fat, n.fibre ?? 0) > 1000) return 'One of those numbers is too big to be one serving. Check for a slip.';
+  // A number the food came without may stay empty: it is not known, and a made-up zero would say it is.
+  const empty = GAPS.filter((k) => n[k] === null);
+  if (n.kcal === null || empty.some((k) => !old || old[k] != null)) return 'Calories, protein, carbs and fat all need a number. Use 0 if there is none.';
+  if (n.kcal > MAX_KCAL || Math.max(n.protein ?? 0, n.carbs ?? 0, n.fat ?? 0, n.fibre ?? 0) > 1000) return 'One of those numbers is too big to be one serving. Check for a slip.';
   // Calories that are far from what the macros add up to usually mean a typo in one of them.
   const fromMacros = n.protein * 4 + n.carbs * 4 + n.fat * 9;
-  if (n.kcal > 50 && (fromMacros > n.kcal * 1.6 || fromMacros < n.kcal * 0.5) && form.dataset.warned !== String(fromMacros)) {
+  if (!empty.length && n.kcal > 50 && (fromMacros > n.kcal * 1.6 || fromMacros < n.kcal * 0.5) && form.dataset.warned !== String(fromMacros)) {
     form.dataset.warned = String(fromMacros);
     return `Those macros add up to about ${Math.round(fromMacros)} kcal, but you typed ${n.kcal}. If that is right, tap Save food again.`;
   }
   const id = form.dataset.id || `my-${newId()}`;
   // Numbers that were changed by hand are yours now, whatever the food started as.
-  const food = { id, name, serving, kcal: n.kcal, protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre, amount: 1, source: 'own' };
+  // The usual number of servings is kept (three slices of pizza stays three).
+  const food = { id, name, serving, kcal: n.kcal, protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre, amount: old?.byGrams ? 1 : old?.amount ?? 1, source: 'own' };
   // A food that was logged by weight stays that way. A new one with grams can be logged either way.
   const barcode = String(fd.get('barcode') ?? '');
   if (lookup.isBarcode(barcode)) food.barcode = barcode;
@@ -879,7 +918,9 @@ actions['delete-food'] = (el) => {
   }
   sheet.close();
   ui.food.pick = null;
-  ui.food.recipe = null;
+  // Only the recipe being removed is closed. One being built, with this food looked at as an
+  // ingredient, stays open with what is already in it.
+  if (ui.food.recipe?.id === id) { ui.food.recipe = null; ui.food.picking = false; }
   // A preloaded food cannot be deleted from the code, so it is hidden instead. Anything else is deleted.
   store.setFood(id, preloaded.some((f) => f.id === id) ? { id, hidden: true } : null);
 };

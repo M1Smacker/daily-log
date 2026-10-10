@@ -103,6 +103,12 @@ function render(nav = true) {
   if (!c.profile) {
     tabs.hidden = true;
     ui.enter = '';
+    // No profile on this phone is not the same as no profile at all. Until the server has
+    // answered, wait: filling in the setup form now would overwrite the real numbers later.
+    if (acc.cloud && !acc.confirmed && !acc.error) {
+      frame(c, 'Daily log', '<div class="muted" style="font-size:16px">Loading your data. The first time on a device, this needs a connection.</div>', { sub: 'One moment', bare: true });
+      return;
+    }
     // If saved data could not be used, say so here: otherwise it looks like a fresh start.
     // The user id is shown here too: it is needed for the security rules before anything can be saved.
     const problem = acc.error
@@ -189,7 +195,14 @@ document.addEventListener('submit', async (e) => {
   const form = e.target.closest('[data-form]');
   if (!form) return;
   e.preventDefault();
-  const result = await forms[form.dataset.form]?.(new FormData(form), form);
+  let result;
+  try {
+    result = await forms[form.dataset.form]?.(new FormData(form), form);
+  } catch (err) {
+    // A fault in a form must not look like a save. Say so, and leave the form open.
+    console.error(err);
+    result = 'Something went wrong there. Check whether it saved, then try again.';
+  }
   if (typeof result === 'string' || result?.done) {
     // Saving redraws the screen, so the message goes on the form that is on screen now.
     const live = form.isConnected ? form : document.querySelector(`[data-form="${form.dataset.form}"]`);

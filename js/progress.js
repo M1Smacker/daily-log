@@ -129,12 +129,13 @@ function phasesCard(c) {
 }
 
 function stallCard(c) {
-  const s = rules.stallCheck(c.data.days, c.key, c.plan.start);
+  const s = rules.stallCheck(c.data.days, c.key, c.plan.start, c.plan.phases);
   const atFloor = c.targets.kcal - rules.STALL_CUT_KCAL < rules.KCAL_FLOOR;
   const text = {
     'need-data': ['Needs more weigh-ins', 'It compares weekly averages, so it needs at least three weigh-ins a week for three weeks.'],
     ok: ['On track', `Your average dropped ${s.drop} kg in the last week. Nothing to change.`],
     fast: ['Losing too fast', `Your average dropped ${s.drop} kg in a week. More than 1 kg a week starts to eat muscle, so add ${rules.STALL_CUT_KCAL} kcal a day.`],
+    break: ['Holding steady, as planned', 'The scale is flat, and around the diet break that is what the plan asks for. Nothing to change. The check starts again three weeks after the break ends.'],
     recomp: ['Probably recomposing', 'The scale is flat but your waist is shrinking. That usually means fat is going and muscle is coming. Leave everything alone for another week.'],
     stall: ['Stalled for two weeks', (atFloor
       ? `Your calories are already close to the ${num(rules.KCAL_FLOOR)} kcal floor, so add ${num(rules.STALL_ADD_STEPS)} steps a day.`
@@ -195,7 +196,30 @@ function photosCard(c) {
     </section>`;
 }
 
-function weekCard(c) {
+// One line per plan week, newest first. Plain numbers with no colours: it is a record, not a score.
+function weeksTable(c, days) {
+  const list = rules.weeks(c.data.days, days, c.key, c.plan.weekStartDow, c.plan.start);
+  if (!list.length) return '';
+  const change = (w) => (w.change === null ? '-' : `${w.change > 0 ? '+' : ''}${w.change} kg`);
+  return `
+    <div class="rule"></div>
+    <div class="eyebrow">Week by week</div>
+    <table class="weeks">
+      <thead><tr><th scope="col">Week from</th><th scope="col">Kcal</th><th scope="col">Protein</th><th scope="col">Gym</th><th scope="col">Weight</th></tr></thead>
+      <tbody>${list.map((w) => `
+        <tr>
+          <th scope="row">${w.running ? 'This week' : shortDate(w.first)}<small>food on ${w.foodDays} ${w.foodDays === 1 ? 'day' : 'days'}</small></th>
+          <td>${w.kcal === null ? '-' : num(w.kcal)}</td>
+          <td>${w.protein === null ? '-' : `${num(w.protein)} g`}</td>
+          <td>${w.done} of ${w.planned}</td>
+          <td>${change(w)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="small muted">Weeks run ${fmt(list[0].first, { weekday: 'long' })} to ${fmt(list[0].last, { weekday: 'long' })}. Kcal and protein are a day's average over the days you logged food, against targets of ${num(c.targets.kcal)} kcal and ${num(c.targets.protein)} g. Weight is how far your 7-day average moved in the week.</div>`;
+}
+
+function weekCard(c, days) {
   const last7 = [0, 1, 2, 3, 4, 5, 6].map((i) => c.data.days[rules.addDays(c.key, -i)] ?? {});
   const fed = last7.filter((d) => d.food?.length);
   const avg = (list, f) => (list.length ? list.reduce((a, d) => a + f(d), 0) / list.length : null);
@@ -215,6 +239,7 @@ function weekCard(c) {
       </div>
       <div class="small muted">Averages over the days you logged: food on ${fed.length} of 7, steps on ${walked.length} of 7.</div>
       ${fed.length >= 4 && kcal < rules.KCAL_FLOOR ? `<div class="note warn"><b>Eating very little</b>Your logged average is under ${num(rules.KCAL_FLOOR)} kcal a day. If the log is complete, that is too low and costs muscle and focus. Eat at your target.</div>` : ''}
+      ${weeksTable(c, days)}
     </section>`;
 }
 
@@ -231,7 +256,7 @@ const dataCard = () => `
   <section class="card">
     <span class="card-title">Your data</span>
     <button type="button" class="btn compact" data-act="copy-claude">Copy my data for Claude</button>
-    <div class="small muted">Copies your plan and the last two weeks. Paste it into the Claude app and ask anything.</div>
+    <div class="small muted">Copies your plan, the last two weeks day by day, and a line for each week. Paste it into the Claude app and ask anything.</div>
     <div class="pair">
       <button type="button" class="btn compact" data-act="export" data-kind="json">Backup file</button>
       <button type="button" class="btn compact" data-act="export" data-kind="csv">Spreadsheet</button>
@@ -244,7 +269,7 @@ export function progressBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   return weightCard(c) + `<div class="grid2">${waistCard(c)}${sessionsCard(c, days)}</div>` +
-    stallCard(c) + weekCard(c) + liftsCard(c) + phasesCard(c) + photosCard(c) + dataCard();
+    stallCard(c) + weekCard(c, days) + liftsCard(c) + phasesCard(c) + photosCard(c) + dataCard();
 }
 
 // ----- Handlers -----
@@ -319,7 +344,7 @@ export function claudeText(c) {
     `Me: ${p.heightCm} cm, started at ${p.startKg} kg, goal ${p.goalKg} kg.`,
     `Daily targets: ${t.kcal} kcal, ${t.protein} g protein, ${t.carbs} g carbs, ${t.fat} g fat, ${t.fibre} g fibre, ${litres(t.waterMl)} L water.`,
     `Weight: 7-day average ${avg ?? 'not enough weigh-ins yet'} kg, plan line says ${rules.planWeight(c.key, c.plan, p.startKg, p.goalKg)} kg.`,
-    `Stall check: ${rules.stallCheck(c.data.days, c.key, c.plan.start).status}.`,
+    `Stall check: ${rules.stallCheck(c.data.days, c.key, c.plan.start, c.plan.phases).status}.`,
     '',
     'Plan rules: lose about 0.6 to 0.8 kg a week. Four sessions a week in the order Upper A, Lower A, Upper B, Lower B.',
     'Keep a weight until every set hits the top of the rep range, then make the smallest jump. A missed session stays next in line.',
@@ -337,13 +362,22 @@ export function claudeText(c) {
       d.steps ?? '-', d.waterMl != null ? litres(d.waterMl) : '-',
       d.session ? `${d.workout?.session ?? ''} ${d.session.type}${d.session.reason ? ` (${d.session.reason})` : ''}`.trim() : '-'].join(', '));
   }
-  const recent = Object.keys(c.data.days).sort().reverse().filter((k) => c.data.days[k].workout).slice(0, 4);
+  const weeks = rules.weeks(c.data.days, rules.schedule(c.plan, c.log, c.key), c.key, c.plan.weekStartDow, c.plan.start);
+  if (weeks.length) {
+    lines.push('', 'Week by week, newest first (week starting, days food was logged, average kcal and protein g over those days, sessions done of planned, 7-day average weight kg at the end of the week, change in kg from a week earlier):');
+    for (const w of weeks) {
+      lines.push([`${w.first}${w.running ? ' (this week so far)' : ''}`, w.foodDays, w.kcal ?? '-', w.protein ?? '-',
+        `${w.done} of ${w.planned}`, w.weight ?? '-', w.change ?? '-'].join(', '));
+    }
+  }
+  // Finished sessions only: a sheet that was opened and never trained is not a session.
+  const recent = Object.keys(c.data.days).sort().reverse().filter((k) => c.data.days[k].workout?.finished).slice(0, 4);
   if (recent.length) lines.push('', 'Recent sessions (lift: weight, sets, fewest reps on any set):');
   for (const k of recent.reverse()) {
     const w = c.data.days[k].workout;
     lines.push(`${k} ${w.session}${w.minimum ? ' (minimum)' : ''}`);
     for (const [id, lift] of Object.entries(w.lifts)) {
-      if (logged(lift)) lines.push(`  ${LIFT_NAMES[id] ?? id}${lift.alt ? ' (alternative used)' : ''}: ${lift.kg ?? 'bodyweight'}${lift.kg ? ' kg' : ''}, ${lift.planned} sets, at least ${lift.reps} reps on each`);
+      if (logged(lift)) lines.push(`  ${liftName(id)}${lift.alt ? ' (alternative used)' : ''}: ${lift.kg ?? 'bodyweight'}${lift.kg ? ' kg' : ''}, ${lift.planned} sets, at least ${lift.reps} reps on each`);
     }
   }
   return lines.join('\n');
