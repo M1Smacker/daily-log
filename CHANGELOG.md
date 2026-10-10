@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.4
+
+- Food screen: meals are open sections now, not boxes. Each has its name on a rule with the total at the far end, and a plain "+ Add" row in place of the boxed button.
+
 ## 0.10.3
 
 - Label reader: uses Google's light model first, which answers in two to three seconds, and moves on to another model if one is slow or refuses. It gives up after a few tries with a message that says what Google said.

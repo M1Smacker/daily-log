@@ -76,15 +76,19 @@ const entryRow = (e) => `
     <span class="entry-nums"><b>${num(e.kcal)} kcal</b><small>${protein(e)}</small></span>
   </button>`;
 
+// A meal is an open section, not a panel: its name on a rule with the total at the far end,
+// what was eaten, then one plain row to add more.
 function mealCard(c, id) {
   const list = (c.day.food ?? []).filter((e) => e.meal === id);
   const sum = rules.totals(list);
   return `
-    <section class="card">
-      <span class="card-title">${MEALS[id]}</span>
-      ${list.length ? `<span class="card-tag">${num(sum.kcal)} kcal, ${num(sum.protein)} g protein</span>` : ''}
-      ${list.length ? `<div>${list.map(entryRow).join('')}</div>` : ''}
-      <button type="button" class="btn compact" data-act="open-add" data-meal="${id}">Add to ${MEALS[id].toLowerCase()}</button>
+    <section class="meal-sec">
+      <div class="meal-top">
+        <h2>${MEALS[id]}</h2><i></i>
+        ${list.length ? `<span><b>${num(sum.kcal)}</b> kcal, ${num(sum.protein)} g protein</span>` : ''}
+      </div>
+      ${list.map(entryRow).join('')}
+      <button type="button" class="add-row" data-act="open-add" data-meal="${id}"><span aria-hidden="true">+</span>Add to ${MEALS[id].toLowerCase()}</button>
     </section>`;
 }
 

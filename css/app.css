@@ -723,3 +723,16 @@ button:disabled { opacity: 0.35; cursor: default; }
 .seg.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .seg.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .card > div > .entry:first-child { border-top: 0; }
+
+/* Food: a meal is an open section. Its name sits on a rule, with the total at the far end. */
+.meal-sec { display: flex; flex-direction: column; }
+.meal-top { display: flex; align-items: baseline; gap: 12px; margin-bottom: 2px; }
+.meal-top h2 { margin: 0; font: 700 26px/1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+.meal-top i { flex: 1; align-self: center; height: 1px; background: var(--line-strong); }
+.meal-top span { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.meal-top b { font: 700 20px/1 var(--display); color: var(--text); margin-right: 2px; }
+.meal-sec .entry:first-of-type { border-top: 0; }
+.add-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0; border: 0; background: none; color: var(--muted); font-size: 16px; font-weight: 500; text-align: left; }
+.meal-sec .entry + .add-row { border-top: 1px solid var(--line); }
+.add-row span { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: var(--on-accent); font: 600 20px/1 'Barlow', sans-serif; }
+.add-row:active { color: var(--text); }
