@@ -6,8 +6,7 @@ rules_version = '2';
 // Everything is denied unless a rule below allows it. The only thing allowed is one
 // signed-in user reading and writing documents under their own id.
 //
-// BEFORE PUBLISHING: replace OWNER_UID_GOES_HERE with your user id. The app shows it in
-// Settings, under Account, once you have signed in for the first time.
+// The id below is the owner's Firebase user id. It is not a secret: it only says whose data this is.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -16,7 +15,7 @@ service cloud.firestore {
     function isOwner(uid) {
       return request.auth != null
         && request.auth.uid == uid
-        && uid == 'OWNER_UID_GOES_HERE';
+        && uid == 'FfMux3rGlcZd5MYUWwbROelE44A3';
     }
 
     function isDayKey(id) {
