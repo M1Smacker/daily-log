@@ -201,6 +201,7 @@ function addScreen(c) {
     <div class="add-head">
       <button type="button" class="link" data-act="${picking ? 'recipe-back' : 'close-add'}">${picking ? 'Back to the recipe' : 'Done'}</button>
       <div class="food-name">${picking ? 'Pick an ingredient' : `Add to ${MEALS[id].toLowerCase()}`}</div>
+      ${!picking && ui.food.added && Date.now() - ui.food.added.at < ADDED_SHOWS_MS ? `<div class="added" role="status">Added: ${esc(ui.food.added.text)}</div>` : ''}
       ${picking ? '' : `<div class="small muted">${c.key === c.today ? '' : `${longDate(c.key)}. `}So far: ${num(sum.kcal)} kcal, ${num(sum.protein)} g protein</div>`}
     </div>
     <input class="search" type="search" placeholder="Search your foods" aria-label="Search your foods" value="${esc(ui.food.search)}" data-search>
@@ -351,7 +352,16 @@ actions['step-amount'] = (el) => {
   paintPick();
 };
 
-const log = (c, entries) => store.setDay(c.key, { food: [...(c.day.food ?? []), ...entries] });
+// Adding stays on the Add screen, so more can follow. A short line says what just went in,
+// because the only other sign is the "So far" total changing.
+const ADDED_SHOWS_MS = 3500;
+function log(c, entries) {
+  ui.food.added = {
+    text: entries.length === 1 ? `${entries[0].name}, ${num(entries[0].kcal)} kcal` : `${entries.length} foods, ${num(rules.totals(entries).kcal)} kcal`,
+    at: Date.now(),
+  };
+  store.setDay(c.key, { food: [...(c.day.food ?? []), ...entries] });
+}
 
 actions['add-food'] = () => {
   const c = ctx();

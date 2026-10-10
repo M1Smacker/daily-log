@@ -736,3 +736,7 @@ button:disabled { opacity: 0.35; cursor: default; }
 .meal-sec .entry + .add-row { border-top: 1px solid var(--line); }
 .add-row span { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: var(--on-accent); font: 600 20px/1 'Barlow', sans-serif; }
 .add-row:active { color: var(--text); }
+/* What was just added. It shows, holds, then fades by itself. */
+.added { align-self: stretch; margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: var(--protein); color: var(--on-accent); font-weight: 600; font-size: 14px; animation: added 3.5s ease forwards; }
+@keyframes added { 0% { opacity: 0; transform: translateY(-4px); } 6%, 80% { opacity: 1; transform: none; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .added { animation: none; } }

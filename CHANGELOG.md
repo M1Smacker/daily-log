@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.5
+
+- After adding a food, the Add screen shows a short "Added" line with its name and calories.
+
 ## 0.10.4
 
 - Food screen: meals are open sections now, not boxes. Each has its name on a rule with the total at the far end, and a plain "+ Add" row in place of the boxed button.

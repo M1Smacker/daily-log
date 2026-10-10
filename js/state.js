@@ -12,7 +12,7 @@ export const ui = {
   calendarOpen: false,
   // adding: the Add screen is open. list: which tab of it. pick: the food in the amount sheet.
   // recipe: the recipe being built. picking: choosing an ingredient for it.
-  food: { meal: null, adding: false, list: 'recent', search: '', pick: null, recipe: null, picking: false, found: null, day: null },
+  food: { meal: null, adding: false, list: 'recent', search: '', pick: null, recipe: null, picking: false, found: null, day: null, added: null },
 };
 
 // ?today=2026-11-03 previews another date, to check how the plan re-flows.
