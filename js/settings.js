@@ -3,7 +3,7 @@
 import * as rules from './rules.js';
 import * as store from './store.js';
 import { ctx } from './state.js';
-import { esc, forms, field, readNumber } from './ui.js';
+import { esc, num, fmt, forms, actions, field, readNumber, openSheet, sheet } from './ui.js';
 import { VERSION } from './version.js';
 
 function numbersForm(p, button) {
@@ -63,11 +63,93 @@ export function settingsBody() {
           <input type="text" readonly value="${esc(store.account.user?.uid ?? '')}" aria-label="Your user id">
           <small>The security rules are pinned to this id, so no other account can read or write.</small>
         </label>
+        <div class="status" data-sync></div>
         <button type="button" class="btn" data-act="sign-out">Sign out</button>`
       : '<div class="muted" style="font-size:14px">No login is set up yet, so everything is saved on this device only. Use the backup file on the Progress screen to keep a copy.</div>'}
     </section>
+    <section class="card">
+      <span class="card-title">Backups</span>
+      <div class="muted" style="font-size:14px">The app keeps one copy of everything per day, for the last ${store.account.cloud ? '14 days' : '3 days on this device'}. If something goes wrong, you can go back to any of them.</div>
+      <button type="button" class="btn" data-act="show-backups">Show the automatic backups</button>
+      <div data-backups></div>
+      <div class="rule"></div>
+      <label class="field"><span>Restore from a backup file</span>
+        <input type="file" accept=".json,application/json" data-backup-file>
+        <small>The file saved by "Backup file" on the Progress screen.</small>
+      </label>
+      <div class="form-error" role="alert" data-backup-msg hidden></div>
+    </section>
     <div class="status plain">Version ${VERSION}</div>`;
 }
+
+// ----- Backups -----
+
+const backupMsg = (text, ok = false) => {
+  const box = document.querySelector('[data-backup-msg]');
+  if (!box) return;
+  box.hidden = false;
+  box.classList.toggle('ok', ok);
+  box.textContent = text;
+};
+
+let offered = []; // the copies last listed, so Restore can find the one that was tapped
+let pendingText = null; // the backup waiting for the confirm tap
+
+actions['show-backups'] = async () => {
+  const box = document.querySelector('[data-backups]');
+  box.innerHTML = '<div class="small muted">Looking.</div>';
+  try {
+    offered = await store.listBackups();
+  } catch {
+    box.innerHTML = '';
+    return backupMsg('Could not load the backups. Check your connection and try again.');
+  }
+  box.innerHTML = offered.length ? offered.map((b, i) => `
+    <div class="row cardio-row">
+      <span><b>${b.id === 'before-restore' ? 'Before the last restore' : esc(fmt(b.id, { weekday: 'short', day: 'numeric', month: 'short' }))}</b><br>
+        <small class="muted">${num(b.days)} ${b.days === 1 ? "day" : "days"} logged, ${num(Math.max(1, b.bytes / 1024))} KB</small></span>
+      <button type="button" class="btn compact" data-act="ask-restore" data-i="${i}">Restore</button>
+    </div>`).join('') : '<div class="small muted">None yet. The first one is made the day after you start using the app.</div>';
+};
+
+// Every restore goes through the same confirm sheet, whatever it came from.
+function askRestore(text, label) {
+  const read = store.readBackup(text);
+  if (read.error) return backupMsg(read.error);
+  pendingText = text;
+  const days = Object.keys(read.data.days).sort();
+  openSheet(`
+    <div class="sheet-body">
+      <div class="card-title">Restore this backup?</div>
+      <div class="muted" style="font-size:14px">${esc(label)}: ${num(days.length)} ${days.length === 1 ? "day" : "days"} logged${days.length ? `, from ${esc(days[0])} to ${esc(days.at(-1))}` : ''}.</div>
+      <div class="note warn"><b>This replaces everything</b>All food, weights, sessions and settings in the app become what is in this backup. What you have now is kept first as "Before the last restore", so you can come back to it.</div>
+      <button type="button" class="btn primary" data-act="do-restore">Restore it</button>
+      <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
+    </div>`);
+}
+
+actions['ask-restore'] = (el) => {
+  const b = offered[Number(el.dataset.i)];
+  if (b) askRestore(b.json, b.id === 'before-restore' ? 'The copy from before the last restore' : `Automatic backup from ${b.id}`);
+};
+
+document.addEventListener('change', async (e) => {
+  if (!e.target.matches?.('[data-backup-file]')) return;
+  const file = e.target.files?.[0];
+  if (!file) return;
+  if (file.size > 5000000) return backupMsg('That file is too big to be a backup from this app.');
+  askRestore(await file.text(), `The file ${file.name}`);
+  e.target.value = '';
+});
+
+actions['do-restore'] = async () => {
+  sheet.close();
+  const text = pendingText;
+  pendingText = null;
+  if (!text) return;
+  const result = await store.restore(text);
+  backupMsg(result.error ?? 'Restored. Everything in the app is now from that backup.', Boolean(result.ok));
+};
 
 forms.profile = (fd, form) => {
   const n = (name) => readNumber(fd, name);

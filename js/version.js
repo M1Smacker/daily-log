@@ -1,2 +1,2 @@
 // Bump this and the one in sw.js together. A test fails if they differ.
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';

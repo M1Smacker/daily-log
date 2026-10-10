@@ -216,7 +216,16 @@ function weekCard(c) {
     </section>`;
 }
 
-const dataCard = `
+// When a backup file was last saved from this device, as a short phrase.
+function lastExport() {
+  let at = null;
+  try { at = localStorage.getItem('daily-log-last-export'); } catch { /* storage blocked */ }
+  if (!at) return 'You have not saved a backup file from this device yet.';
+  const days = rules.diffDays(new Date().toISOString().slice(0, 10), at);
+  return `Last backup file: ${days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`}.${days > 14 ? ' Worth saving a fresh one.' : ''}`;
+}
+
+const dataCard = () => `
   <section class="card">
     <span class="card-title">Your data</span>
     <button type="button" class="btn compact" data-act="copy-claude">Copy my data for Claude</button>
@@ -225,6 +234,7 @@ const dataCard = `
       <button type="button" class="btn compact" data-act="export" data-kind="json">Backup file</button>
       <button type="button" class="btn compact" data-act="export" data-kind="csv">Spreadsheet</button>
     </div>
+    <div class="small muted">${lastExport()} A file kept in your phone's Files or iCloud survives even if the account is lost. Restore it from Settings.</div>
     <div class="form-error ok" role="status" data-data-msg hidden></div>
   </section>`;
 
@@ -232,7 +242,7 @@ export function progressBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   return weightCard(c) + `<div class="grid2">${waistCard(c)}${sessionsCard(c, days)}</div>` +
-    stallCard(c) + weekCard(c) + liftsCard(c) + phasesCard(c) + photosCard(c) + dataCard;
+    stallCard(c) + weekCard(c) + liftsCard(c) + phasesCard(c) + photosCard(c) + dataCard();
 }
 
 // ----- Handlers -----
@@ -287,7 +297,10 @@ function csv(c) {
 
 actions.export = (el) => {
   const c = ctx();
-  if (el.dataset.kind === 'json') download(`daily-log-${c.key}.json`, 'application/json', JSON.stringify(c.data, null, 2));
+  if (el.dataset.kind === 'json') {
+    download(`daily-log-${c.key}.json`, 'application/json', JSON.stringify(c.data, null, 2));
+    try { localStorage.setItem('daily-log-last-export', new Date().toISOString().slice(0, 10)); } catch { /* storage blocked */ }
+  }
   else download(`daily-log-${c.key}.csv`, 'text/csv', csv(c));
   say(el.dataset.kind === 'json' ? 'Backup file saved. It holds everything in the app.' : 'Spreadsheet saved, one row per day.');
 };

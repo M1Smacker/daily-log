@@ -57,6 +57,16 @@ service cloud.firestore {
               || (request.resource.data.cardio is list && request.resource.data.cardio.size() <= 20));
       }
 
+      // Whole-app copies: one a day, plus the one taken just before a restore.
+      match /backups/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && (isDayKey(id) || id == 'before-restore')
+          && request.resource.data.keys().hasOnly(['id', 'at', 'days', 'bytes', 'json'])
+          && request.resource.data.json is string
+          && request.resource.data.json.size() <= 1000000;
+      }
+
       // Your own foods, and edits to the preloaded ones.
       match /foods/{food} {
         allow read, delete: if isOwner(uid);

@@ -1,6 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+- Data safety: one automatic whole-app backup a day (14 kept in the account, 3 on a device-only setup), restore from any of them or from a backup file, with the current state kept first so a restore can be undone.
+- Saving a day now replaces only the fields that changed, so two devices cannot wipe each other's entries for the same day.
+- Signing out waits until everything has synced. The app asks the browser to keep its storage.
+- Progress shows when a backup file was last saved.
+
+## 0.1.0
 
 - Bare Today screen with sample numbers: week strip, next session, calories and macros, steps, water, weight, supplements.
 - Rules module with tests: day rollover, phase by date, step ramp, week strip, next session, biggest macro gap.
