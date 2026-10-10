@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.3
+
+- Label reader: uses Google's light model first, which answers in two to three seconds, and moves on to another model if one is slow or refuses. It gives up after a few tries with a message that says what Google said.
+- While a table is being read, the held picture says "Reading the table" over it.
+
 ## 0.10.2
 
 - The barcode scanner can read a nutrition table too: point the camera at the table and tap "No barcode? Read the nutrition table". It opens Copy the label with the boxes filled in to check.

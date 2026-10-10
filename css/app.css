@@ -714,6 +714,8 @@ button:disabled { opacity: 0.35; cursor: default; }
 /* The outline that forms around a barcode once it is seen. White while looking, lime when read. */
 .scan-box i { position: absolute; border: 2px solid var(--text); border-radius: 8px; pointer-events: none; transition: left 0.08s linear, top 0.08s linear, width 0.08s linear, height 0.08s linear, border-color 0.15s; }
 .scan-box i.got { border-color: var(--protein); border-width: 3px; }
+.scan-wait { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; text-align: center; background: rgb(10 10 11 / 0.62); font-weight: 600; animation: scan-wait 1.2s ease-in-out infinite alternate; }
+@keyframes scan-wait { from { opacity: 0.65; } to { opacity: 1; } }
 .photo-btn { display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .ok-ink { color: var(--protein); }
 .warn-ink { color: var(--amber); }

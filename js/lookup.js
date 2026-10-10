@@ -139,38 +139,82 @@ export function fromLabel(raw) {
   return out;
 }
 
-let model = 'gemini-flash-latest'; // swapped for a listed one if Google stops using this name
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
+// Tried in this order: the light model first, because reading a table is easy work and it answers
+// in a couple of seconds where the bigger one can take half a minute. The one that last worked is
+// remembered on this device and tried first next time.
+const MODELS = ['gemini-flash-lite-latest', 'gemini-flash-latest'];
+const MODEL_KEY = 'daily-log-label-model';
+const TRY_MS = 12000; // how long one model gets before the next is tried
+export const labelModel = { last: null, tried: [] }; // what happened on the last read, for the message
 
-// base64: the photo as JPEG. Throws an Error whose message is a sentence that can be shown.
-export async function readLabel(base64, key) {
-  const body = JSON.stringify({
-    contents: [{ parts: [{ inline_data: { mime_type: 'image/jpeg', data: base64 } }, { text: LABEL_PROMPT }] }],
-    generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: LABEL_SCHEMA },
+// One try with one model. Returns { food } on success, or { skip: why } to try the next model.
+// Throws only for things another model cannot fix: no internet, a bad key, the daily limit.
+async function tryModel(name, base64, key) {
+  const ask = (noThinking) => fetch(`${GEMINI}/models/${name}:generateContent`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, signal: AbortSignal.timeout(TRY_MS),
+    body: JSON.stringify({
+      contents: [{ parts: [{ inline_data: { mime_type: 'image/jpeg', data: base64 } }, { text: LABEL_PROMPT }] }],
+      // No "thinking": copying numbers off a table does not need it, and it is what makes answers slow.
+      generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: LABEL_SCHEMA, ...(noThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}) },
+    }),
   });
-  const call = () => fetch(`${GEMINI}/models/${model}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body });
   let res;
   try {
-    res = await call();
-    if (res.status === 404) {
-      // The model name has been retired. Ask which ones this key can use and take a fast one.
-      const list = await (await fetch(`${GEMINI}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } })).json();
-      const pick = (list.models ?? []).map((m) => m.name.replace('models/', ''))
-        .filter((m, i) => m.includes('flash') && !/image|tts|audio|live|embed/.test(m) && list.models[i].supportedGenerationMethods?.includes('generateContent'));
-      if (!pick.length) throw new Error('none');
-      model = pick.find((m) => m.endsWith('-latest')) ?? pick.at(-1);
-      res = await call();
-    }
-  } catch {
+    res = await ask(true);
+    // Some models refuse to have thinking switched off, with a 400 that does not say why.
+    // Ask again as the model is. (A bad key is also a 400, and asking twice does no harm.)
+    if (res.status === 400) res = await ask(false);
+  } catch (e) {
+    if (e?.name === 'TimeoutError') return { skip: 'too slow' };
     throw new Error('No connection. Reading a label needs the internet.');
   }
-  if (res.status === 400 || res.status === 403) throw new Error('Google did not accept the key. Check it in Settings.');
-  if (res.status === 429) throw new Error('The free limit is used up for now. Type the numbers this time, or try again later.');
-  if (!res.ok) throw new Error('The label reader did not answer. Type the numbers this time, or try again.');
+  if (!res.ok) {
+    const said = String((await res.json().catch(() => null))?.error?.message ?? '').slice(0, 140);
+    if (/api key/i.test(said)) throw new Error('Google did not accept the key. Check it in Settings.');
+    if (res.status === 429) throw new Error(`The free limit is used up for now. Type the numbers this time, or try again later. (${said})`);
+    return { skip: `${res.status} ${said}`.trim() };
+  }
   try {
     const data = await res.json();
-    return fromLabel(JSON.parse(data.candidates[0].content.parts.map((p) => p.text ?? '').join('')));
+    return { food: fromLabel(JSON.parse(data.candidates[0].content.parts.map((x) => x.text ?? '').join(''))) };
   } catch {
     throw new Error('The label could not be read from that photo. Try again closer, flatter and in better light.');
   }
+}
+
+// The models this key can use for this, lightest first. Only asked for when the usual names fail.
+async function listedModels(key) {
+  try {
+    const list = await (await fetch(`${GEMINI}/models?pageSize=200`, { headers: { 'x-goog-api-key': key }, signal: AbortSignal.timeout(TRY_MS) })).json();
+    return (list.models ?? [])
+      .filter((m) => m.supportedGenerationMethods?.includes('generateContent') && /flash/.test(m.name) && !/image|tts|audio|live|embed|preview|exp/.test(m.name))
+      .map((m) => m.name.replace('models/', ''))
+      .sort((a, b) => /lite/.test(b) - /lite/.test(a) || b.localeCompare(a));
+  } catch {
+    return [];
+  }
+}
+
+// base64: the photo as JPEG. Throws an Error whose message is a sentence that can be shown.
+export async function readLabel(base64, key) {
+  let saved = null;
+  try { saved = localStorage.getItem(MODEL_KEY); } catch { /* no storage: fine */ }
+  labelModel.tried = [];
+  const run = async (names) => {
+    for (const name of names) {
+      if (labelModel.tried.some((t) => t.startsWith(`${name}:`))) continue;
+      const r = await tryModel(name, base64, key);
+      if (r.food) {
+        labelModel.last = name;
+        try { localStorage.setItem(MODEL_KEY, name); } catch { /* fine */ }
+        return r.food;
+      }
+      labelModel.tried.push(`${name}: ${r.skip}`);
+    }
+    return null;
+  };
+  const food = await run([...new Set([saved, ...MODELS].filter(Boolean))]) ?? await run((await listedModels(key)).slice(0, 3));
+  if (food) return food;
+  throw new Error(`The label reader could not do it. Type the numbers this time, or try again. (${labelModel.tried.join('; ').slice(0, 300)})`);
 }

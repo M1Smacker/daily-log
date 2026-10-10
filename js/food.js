@@ -541,9 +541,12 @@ actions['scan-table'] = async (el) => {
   const typed = String(sheet.querySelector('[name="code"]')?.value ?? '').replace(/\s/g, '');
   const shot = Object.assign(document.createElement('canvas'), { width: video.videoWidth, height: video.videoHeight });
   shot.getContext('2d').drawImage(video, 0, 0);
-  video.pause(); // hold the picture still, so it is clear which one is being read
+  // Hold the picture still, and say so over it: this is the one being read.
+  video.pause();
+  sheet.querySelector('[data-scan-mark]').hidden = true;
+  sheet.querySelector('.scan-box').insertAdjacentHTML('beforeend', '<div class="scan-wait">Reading the table. A few seconds.</div>');
   el.disabled = true;
-  say('Reading the table.');
+  say('The picture is held still while it is read.');
   let read = null;
   let problem = '';
   try {
