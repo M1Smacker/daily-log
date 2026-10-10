@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- Connected to the Firebase project. The app now asks for a Google login and keeps data in the private database.
+
 ## 0.2.0
 
 - Data safety: one automatic whole-app backup a day (14 kept in the account, 3 on a device-only setup), restore from any of them or from a backup file, with the current state kept first so a restore can be undone.

@@ -92,7 +92,10 @@ function render(nav = true) {
     tabs.hidden = true;
     ui.enter = '';
     // If saved data could not be used, say so here: otherwise it looks like a fresh start.
-    const problem = acc.error ? `<div class="note warn"><b>Heads up</b>${esc(acc.error)}</div>` : '';
+    // The user id is shown here too: it is needed for the security rules before anything can be saved.
+    const problem = acc.error
+      ? `<div class="note warn"><b>Heads up</b>${esc(acc.error)}${acc.user ? `<br>Your user id: <span data-uid>${esc(acc.user.uid)}</span>` : ''}</div>`
+      : '';
     frame(c, 'Welcome', problem + setupBody(), { sub: 'First, your numbers', bare: true });
     return;
   }
