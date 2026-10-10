@@ -6,7 +6,7 @@ import * as store from './store.js';
 import { ui, ctx } from './state.js';
 import { view, sheet, esc, shortDate, longDate, SETTINGS, CHEVRON_RIGHT, BACK, CHEVRON, actions, forms, app } from './ui.js';
 import { todayBody } from './today.js';
-import { foodBody, filterChips } from './food.js';
+import { foodBody } from './food.js';
 import { setupBody, settingsBody } from './settings.js';
 import { workoutView, refreshRest } from './workout.js';
 import { progressBody } from './progress.js';
@@ -121,7 +121,7 @@ function render(nav = true) {
   ui.tab = tab;
 
   if (tab === 'today') frame(c, 'Today', todayBody());
-  else if (tab === 'food') { frame(c, 'Food', foodBody()); filterChips(); }
+  else if (tab === 'food') frame(c, 'Food', foodBody());
   else if (tab === 'settings') frame(c, 'Settings', settingsBody(), { sub: 'Your numbers and the plan', back: true });
   else if (tab === 'guide') frame(c, 'Guide', guideBody(c), { sub: 'How the plan works', back: true });
   else if (tab === 'workout') {

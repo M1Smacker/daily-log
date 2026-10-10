@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+- Food screen rebuilt: Breakfast, Lunch, Snacks and Dinner each have their own Add button. Adding opens one screen with search, Recent (one tap to add the same amount again), My foods, Meals (add an earlier meal again in one tap) and Recipes.
+- Recipes: build a dish from saved foods, say how many servings it makes, and the app works out one serving. With the cooked weight filled in, it can be logged by grams.
+- Quick add: type calories straight in. Protein, carbs and fat are optional.
+- A food with a known weight per serving can be logged in grams or in servings.
+- 29 more foods: plain foods from USDA, and desi breads, snacks and dishes from public calorie sites. Every food says where its numbers came from. A number the sources did not give is shown as unknown, never guessed.
+
 ## 0.5.0
 
 - Settings has a "Your gym" card: the list of dumbbell weights can be edited.

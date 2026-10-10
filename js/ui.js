@@ -29,7 +29,7 @@ export const app = { redraw: () => {} };
 
 export function openSheet(html) {
   sheet.innerHTML = html;
-  sheet.showModal();
+  if (!sheet.open) sheet.showModal();
 }
 actions['close-sheet'] = () => sheet.close();
 

@@ -228,8 +228,8 @@ test('portion: by weight and by serving', () => {
   const strips = { byGrams: true, grams: 100, kcal: 200, protein: 16, carbs: 12, fat: 9, fibre: 0.8 };
   assert.deepEqual(r.portion(strips, 150), { kcal: 300, protein: 24, carbs: 18, fat: 13.5, fibre: 1.2 });
   const roti = { kcal: 110, protein: 3, carbs: 22, fat: 1.5 }; // no fibre given
-  assert.deepEqual(r.portion(roti, 2), { kcal: 220, protein: 6, carbs: 44, fat: 3, fibre: 0 });
-  assert.deepEqual(r.portion(roti, 0.5), { kcal: 55, protein: 1.5, carbs: 11, fat: 0.8, fibre: 0 });
+  assert.deepEqual(r.portion(roti, 2), { kcal: 220, protein: 6, carbs: 44, fat: 3, fibre: null });
+  assert.deepEqual(r.portion(roti, 0.5), { kcal: 55, protein: 1.5, carbs: 11, fat: 0.8, fibre: null });
 });
 
 test('totals: adds entries and copes with an empty day', () => {

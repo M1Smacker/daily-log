@@ -10,7 +10,9 @@ export const ui = {
   tab: null,
   enter: '',
   calendarOpen: false,
-  food: { id: null, amount: null, meal: null, search: '' },
+  // adding: the Add screen is open. list: which tab of it. pick: the food in the amount sheet.
+  // recipe: the recipe being built. picking: choosing an ingredient for it.
+  food: { meal: null, adding: false, list: 'recent', search: '', pick: null, recipe: null, picking: false },
 };
 
 // ?today=2026-11-03 previews another date, to check how the plan re-flows.

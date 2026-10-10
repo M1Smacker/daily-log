@@ -106,7 +106,8 @@ test('food maths: never produces a broken number', () => {
     if (rand() < 0.5) Object.assign(food, { byGrams: true, grams: pick(rand, [1, 40, 100, 158]) });
     const p = r.portion(food, pick(rand, odd));
     const t = r.totals([p, p, {}]);
-    for (const v of [...Object.values(p), ...Object.values(t)]) assert.ok(Number.isFinite(v) && v >= 0, `got ${v}`);
+    for (const v of Object.values(t)) assert.ok(Number.isFinite(v) && v >= 0, `got ${v}`);
+    for (const v of Object.values(p)) assert.ok(v === null || (Number.isFinite(v) && v >= 0), `got ${v}`); // null: the food has no figure
   }
 });
 

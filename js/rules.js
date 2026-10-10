@@ -274,8 +274,54 @@ const round1 = (n) => Math.round(n * 10) / 10;
 // food holds macros for one serving. amount is grams when the food is logged by weight
 // (food.byGrams, with food.grams in one serving), otherwise a number of servings.
 export function portion(food, amount) {
-  const servings = food.byGrams ? amount / food.grams : amount;
-  return Object.fromEntries(MACROS.map((m) => [m, round1((food[m] ?? 0) * servings)]));
+  return portionBy(food, amount, food.byGrams ? 'g' : 'serving');
+}
+
+// The same, with the unit said out loud: 'g' (needs food.grams) or 'serving'.
+// A number the food does not have stays unknown (null). It is never guessed.
+export function portionBy(food, amount, unit) {
+  const servings = unit === 'g' ? amount / food.grams : amount;
+  return Object.fromEntries(MACROS.map((m) => [m, food[m] == null ? null : round1(food[m] * servings)]));
+}
+
+// What a recipe gives per serving. items: logged-style entries with their macros.
+// If one ingredient has no figure for a macro, the recipe has none for it either.
+export function recipeServing(items, servings) {
+  return Object.fromEntries(MACROS.map((m) => {
+    if (m !== 'fibre' && items.some((i) => i[m] == null)) return [m, null];
+    return [m, round1(items.reduce((a, i) => a + (i[m] ?? 0), 0) / servings)];
+  }));
+}
+
+// The foods logged in the last `span` days, most often first, each with the amount last used.
+export function recentFoods(days, key, span = 30) {
+  const seen = new Map();
+  for (let i = 0; i < span; i++) {
+    // Newest first within the day too, so the amount kept is the one used last.
+    for (const e of [...(days[addDays(key, -i)]?.food ?? [])].reverse()) {
+      if (!e.foodId) continue;
+      const r = seen.get(e.foodId) ?? { foodId: e.foodId, amount: e.amount, unit: e.unit, count: 0, ago: i };
+      r.count++;
+      seen.set(e.foodId, r);
+    }
+  }
+  return [...seen.values()].sort((a, b) => b.count - a.count || a.ago - b.ago);
+}
+
+// Earlier meals of one kind (say, lunches) from the last `span` days, newest first.
+// The same set of foods is listed once.
+export function pastMeals(days, key, meal, span = 14) {
+  const out = [];
+  const had = new Set();
+  for (let i = 1; i <= span; i++) {
+    const k = addDays(key, -i);
+    const entries = (days[k]?.food ?? []).filter((e) => e.meal === meal);
+    const sign = entries.map((e) => `${e.foodId ?? e.name}:${e.amount}`).sort().join('|');
+    if (!entries.length || had.has(sign)) continue;
+    had.add(sign);
+    out.push({ key: k, entries });
+  }
+  return out;
 }
 
 export function totals(entries) {
