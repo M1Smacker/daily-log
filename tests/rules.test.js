@@ -66,6 +66,14 @@ test('schedule: training on a rest day takes the next session and re-flows the r
   assert.equal(on(days, '2026-10-10').session, 'upperB');
 });
 
+test('schedule: a logged workout fixes which session a day was, and the cycle carries on from it', () => {
+  // Upper A was logged on Saturday. Later, the missed Thursday is marked done after all.
+  const log = { '2026-10-08': { type: 'done' }, '2026-10-10': { type: 'done', id: 'upperA' } };
+  const days = sched('2026-10-11', log);
+  assert.equal(on(days, '2026-10-10').session, 'upperA'); // still what was actually done
+  assert.equal(on(days, '2026-10-11').session, 'lowerA'); // and next follows it
+});
+
 test('weekStrip: Thursday to Wednesday', () => {
   const strip = r.weekStrip(sched('2026-10-10'), '2026-10-10', plan.weekStartDow);
   assert.deepEqual(strip.map((d) => d.key), [
@@ -152,6 +160,13 @@ test('progression: big jumps need extra reps, and the heaviest dumbbell points t
   assert.deepEqual(r.progression(raise, sets(7.5, 20), DB), { type: 'jump', kg: 7.5, to: 8 }); // a small step
   assert.deepEqual(r.progression(raise, sets(20, 20), DB), { type: 'cap', kg: 20 });
   assert.deepEqual(r.progression({ kind: 'body', reps: [6, 12] }, sets(0, 12), DB), { type: 'body' });
+});
+
+test('progression: a shared lift is judged by the range it was done under', () => {
+  const curlB = { kind: 'machine', reps: [10, 15] }; // today's session asks for 15
+  const last = { sets: [{ kg: 40, reps: 12 }, { kg: 40, reps: 12 }], planned: 2, top: 12 }; // done under 10 to 12
+  assert.deepEqual(r.progression(curlB, last, DB), { type: 'jump', kg: 40, to: 45 });
+  assert.equal(r.progression(curlB, { ...last, top: undefined }, DB).type, 'hold');
 });
 
 test('wentBackwards: two drops in a row', () => {

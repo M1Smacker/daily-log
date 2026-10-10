@@ -5,10 +5,10 @@ import * as rules from './rules.js';
 import * as store from './store.js';
 import { ctx } from './state.js';
 import { sessions } from './exercises.js';
+import { logged, asSets } from './workout.js';
 import { esc, num, fmt, shortDate, litres, actions, forms, openSheet, field, readNumber } from './ui.js';
 
 const LIFT_NAMES = Object.fromEntries(Object.values(sessions).flat().map((e) => [e.id, e.name]));
-const filled = (lift) => (lift?.sets ?? []).filter((s) => s?.reps > 0);
 const dayKcal = (d) => rules.totals(d.food ?? []);
 
 // ----- Weight -----
@@ -154,10 +154,9 @@ function liftsCard(c) {
   for (const k of Object.keys(c.data.days).sort()) {
     const w = c.data.days[k].workout;
     for (const [id, lift] of Object.entries(w?.lifts ?? {})) {
-      const sets = filled(lift);
-      if (!sets.length || lift.alt) continue;
-      const top = sets.reduce((a, b) => ((b.kg ?? 0) * (1 + b.reps / 30) > (a.kg ?? 0) * (1 + a.reps / 30) ? b : a));
-      (history[id] ??= []).push({ key: k, top, score: rules.bestSet(sets) });
+      if (!logged(lift) || lift.alt || w.half) continue;
+      // Bodyweight lifts have no weight, so their line follows reps.
+      (history[id] ??= []).push({ key: k, top: lift, score: lift.kg ? rules.bestSet(asSets(lift)) : lift.reps });
     }
   }
   const rows = Object.entries(history).filter(([, h]) => h.length >= 2).map(([id, h]) => {
@@ -323,13 +322,12 @@ export function claudeText(c) {
       d.session ? `${d.workout?.session ?? ''} ${d.session.type}${d.session.reason ? ` (${d.session.reason})` : ''}`.trim() : '-'].join(', '));
   }
   const recent = Object.keys(c.data.days).sort().reverse().filter((k) => c.data.days[k].workout).slice(0, 4);
-  if (recent.length) lines.push('', 'Recent sessions (lift: kg x reps, reps in reserve):');
+  if (recent.length) lines.push('', 'Recent sessions (lift: weight, sets, fewest reps on any set):');
   for (const k of recent.reverse()) {
     const w = c.data.days[k].workout;
     lines.push(`${k} ${w.session}${w.minimum ? ' (minimum)' : ''}`);
     for (const [id, lift] of Object.entries(w.lifts)) {
-      const sets = filled(lift).map((s) => `${s.kg ?? 'BW'} x ${s.reps}${s.rir != null ? ` @${s.rir}` : ''}`).join(', ');
-      if (sets) lines.push(`  ${LIFT_NAMES[id] ?? id}${lift.alt ? ' (alternative used)' : ''}: ${sets}`);
+      if (logged(lift)) lines.push(`  ${LIFT_NAMES[id] ?? id}${lift.alt ? ' (alternative used)' : ''}: ${lift.kg ?? 'bodyweight'}${lift.kg ? ' kg' : ''}, ${lift.planned} sets, at least ${lift.reps} reps on each`);
     }
   }
   return lines.join('\n');

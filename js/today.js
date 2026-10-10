@@ -117,7 +117,7 @@ function nextSession(c, days, run) {
         <div class="muted" style="font-size:14px">${nextLine}</div>
         <div class="tear"></div>
         <div class="pair">
-          <button type="button" class="btn primary" data-act="start-workout">Open session</button>
+          <button type="button" class="btn primary" data-act="start-workout">Recap</button>
           <button type="button" class="btn" data-act="mark-today" data-type="clear">Undo</button>
         </div>
       </section>`;
@@ -252,7 +252,7 @@ actions['open-day'] = (el) => {
         <div class="muted" style="font-size:14px">${status}</div>
       </div>
       ${d.state === 'done' || d.state === 'min' || d.isToday
-        ? `<button type="button" class="btn primary" data-act="start-workout" data-day="${k}">${d.isToday && d.state === 'planned' ? 'Start this session' : 'Open the logged sets'}</button>` : ''}
+        ? `<button type="button" class="btn primary" data-act="start-workout" data-day="${k}">${d.isToday && d.state !== 'done' && d.state !== 'min' ? 'Open the session sheet' : 'Open the recap'}</button>` : ''}
       <button type="button" class="btn${d.state === 'done' || d.state === 'min' || d.isToday ? '' : ' primary'}" data-act="set-day" data-type="done" data-day="${k}">Mark done</button>
       <button type="button" class="btn" data-act="set-day" data-type="min" data-day="${k}">Did the minimum</button>
       ${planned ? `

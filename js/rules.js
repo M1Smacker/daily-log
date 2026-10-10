@@ -25,7 +25,7 @@ export function stepTarget(key, start, steps) {
   return Math.min(steps.target, steps.from + steps.weeklyAdd * weeks);
 }
 
-// log: { 'YYYY-MM-DD': { type: 'done' | 'min' | 'missed', reason? } }.
+// log: { 'YYYY-MM-DD': { type: 'done' | 'min' | 'missed', reason?, id? } }. id is the session logged that day.
 // Builds every day from plan.start to plan.end. What is next is decided by the cycle,
 // never by the weekday: a missed session stays next in line and lands on the next
 // planned gym day, so every later day moves one session along.
@@ -40,6 +40,9 @@ export function schedule(plan, log, todayKey) {
     const planned = Boolean(plan.weekdays[weekday(k)]);
     const day = { key: k, dow: weekday(k), dayNum: Number(k.slice(8)), isToday: k === todayKey, session: null, state: 'rest' };
     if (entry?.type === 'done' || entry?.type === 'min') {
+      // A logged workout knows which session it was, and the cycle carries on from there.
+      // Without one, the day takes whatever was next in line.
+      if (plan.cycle.includes(entry.id)) idx = plan.cycle.indexOf(entry.id);
       day.state = entry.type;
       day.session = plan.cycle[idx++ % n];
     } else if (planned && (k < todayKey || (entry?.type === 'missed' && k === todayKey))) {
@@ -126,7 +129,9 @@ export function nextWeight(kind, kg, dumbbells) {
 // The jump rule (double progression). Keep the weight until every set reaches the top of
 // the rep range at the effort the phase asked for, then go up by the smallest jump.
 //   ex:   { kind, reps: [low, high] }
-//   last: the previous time this lift was done: { sets: [{ kg, reps, rir }], planned, rirLo }
+//   last: the previous time this lift was done: { sets: [{ kg, reps, rir }], planned, rirLo, top }
+//         top is the top of the rep range in the session it was done in. A lift shared by two
+//         sessions can have two ranges, and it is judged by the one it was done under.
 // Returns one of:
 //   { type: 'start' }                    never done before
 //   { type: 'body' }                     no weight to add, progress in reps
@@ -141,7 +146,7 @@ export function progression(ex, last, dumbbells) {
   const kg = Math.min(...sets.map((s) => s.kg ?? 0));
   if (!(kg > 0)) return { type: 'start' };
 
-  const top = ex.reps[1];
+  const top = last.top ?? ex.reps[1];
   const effortOk = sets.every((s) => s.rir == null || s.rir >= (last.rirLo ?? 0));
   const earned = sets.length >= (last.planned ?? 1) && sets.every((s) => s.reps >= top) && effortOk;
   if (!earned) return { type: 'hold', kg };

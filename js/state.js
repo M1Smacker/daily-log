@@ -21,7 +21,7 @@ export function ctx() {
   // ?today=2026-11-03 previews another date, to check how the plan re-flows.
   const key = param('today') ?? rules.dayKey(new Date(), plan.rolloverHour, plan.utcOffsetHours);
   const log = {};
-  for (const [k, d] of Object.entries(data.days)) if (d.session) log[k] = d.session;
+  for (const [k, d] of Object.entries(data.days)) if (d.session) log[k] = { ...d.session, id: d.workout?.session };
   // Your own foods and edits sit on top of the preloaded list. A hidden one is removed.
   const foods = [...preloaded.filter((f) => !data.foods[f.id]), ...Object.values(data.foods)]
     .filter((f) => !f.hidden);
