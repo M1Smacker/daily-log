@@ -55,5 +55,6 @@ The app talks to its own Firebase project, and to two food lists only when a loo
 
 - USDA FoodData Central, for plain foods. It needs a free key, which is typed into Settings and kept in the user's private data, never in this repository.
 - Open Food Facts, for packaged foods by barcode. Its data is under the Open Database Licence.
+- Google Gemini, to read a nutrition label from a photo. It needs a free key, kept the same way. Only the photo of the label is sent.
 
 The barcode scanner is ZXing-C++ compiled to WebAssembly, through the `barcode-detector` 3.2.2 and `zxing-wasm` 3.1.3 packages (both MIT, licences in `vendor/`; ZXing-C++ itself is Apache 2.0). The files are kept in `vendor/`, so nothing is loaded from another site.

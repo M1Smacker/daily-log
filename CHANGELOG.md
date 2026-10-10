@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.0
+
+- Photograph a nutrition label and the Copy the label form fills itself in, for you to check before saving. It needs a free Google AI key in Settings, and sends the photo of the label to Google. Reachable after a barcode that is not found, and from New food.
+
 ## 0.9.1
 
 - Barcode scanner replaced with ZXing-C++ (WebAssembly), which reads small, tilted and blurred barcodes far better than the old one. It works at full HD, looks mainly at the middle of the picture, zooms in where the phone allows, and accepts a number only when two looks in a row agree.

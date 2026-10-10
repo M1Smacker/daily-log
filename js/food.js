@@ -26,7 +26,7 @@ const LISTS = { recent: 'Recent', mine: 'My foods', meals: 'Meals', recipes: 'Re
 // Where a food's numbers came from. Shown wherever the food is picked.
 const SOURCES = {
   usda: 'USDA', off: 'Open Food Facts', web: 'From the web, approximate',
-  plan: 'From your plan, approximate', own: 'You typed it',
+  plan: 'From your plan, approximate', own: 'You typed it', label: 'Read from the pack, checked by you',
 };
 const GRAM_STEP = 10;
 const SERVING_STEP = 0.5;
@@ -543,8 +543,16 @@ function openLabel(name, code) {
     <form class="sheet-body" data-form="label" novalidate>
       <div>
         <div class="card-title">Copy the label</div>
-        <div class="muted" style="font-size:14px">This barcode is not on the list with its numbers. Type them from the pack once, in the order the label has them, and the next scan finds it here.</div>
+        <div class="muted" style="font-size:14px">${code
+          ? 'This barcode is not on the list with its numbers. Take them from the pack once, and the next scan finds it here.'
+          : 'Take the numbers from the nutrition table on the pack.'}</div>
       </div>
+      ${ctx().plan.geminiKey ? `
+        <label class="btn photo-btn">Photograph the label
+          <input type="file" accept="image/*" capture="environment" data-label-photo hidden>
+        </label>
+        <div class="small muted" data-label-msg>One photo of the whole table, flat and sharp. The boxes below fill in for you to check.</div>`
+      : '<div class="small muted">To fill this in from a photo of the label, add a free Google AI key in Settings.</div>'}
       <input type="hidden" name="barcode" value="${esc(code)}">
       ${textField('name', 'Name', name)}
       ${field('per', 'The numbers are for', 100, { unit: 'g', hint: 'Most labels say per 100 g. If yours only says per serving, type the serving weight.' })}
@@ -568,6 +576,46 @@ function openLabel(name, code) {
     </form>`);
 }
 
+// A photo of the label, made small enough to send quickly but still sharp enough to read.
+async function photoBase64(file) {
+  const img = await createImageBitmap(file);
+  const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+  const canvas = Object.assign(document.createElement('canvas'), { width: Math.round(img.width * scale), height: Math.round(img.height * scale) });
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', 0.85).split(',')[1];
+}
+
+// Fills the boxes from what was read. Only boxes with a reading are touched, and nothing is saved.
+function fillLabel(form, v) {
+  for (const k of ['per', 'energy', 'energyUnit', 'fat', 'satFat', 'carbs', 'sugar', 'fibre', 'protein', 'salt']) {
+    if (v[k] !== null && v[k] !== undefined) form.querySelector(`[name="${k}"]`).value = v[k];
+  }
+  const name = form.querySelector('[name="name"]');
+  if (!name.value.trim() && v.name) name.value = v.name;
+  form.dataset.scanned = '1';
+}
+
+document.addEventListener('change', async (e) => {
+  if (!e.target.matches?.('[data-label-photo]')) return;
+  const file = e.target.files?.[0];
+  const form = e.target.closest('form');
+  const say = (text, cls = '') => { const el = form.querySelector('[data-label-msg]'); el.textContent = text; el.className = `small ${cls || 'muted'}`; };
+  e.target.value = '';
+  if (!file) return;
+  say('Reading the label.');
+  try {
+    const v = await lookup.readLabel(await photoBase64(file), ctx().plan.geminiKey);
+    if (!form.isConnected) return;
+    if (!v.found) return say('No numbers could be read from that photo. Try again closer, flatter and in better light.', 'warn-ink');
+    fillLabel(form, v);
+    say(v.found < 4
+      ? 'Some boxes are filled in. The rest could not be read: type those from the pack, and check the others.'
+      : 'Filled in from the photo. Check every number against the pack before you save.', 'ok-ink');
+  } catch (err) {
+    if (form.isConnected) say(err.message, 'warn-ink');
+  }
+});
+
 forms.label = (fd, form) => {
   const name = String(fd.get('name')).trim();
   const n = Object.fromEntries(['per', 'energy', 'fat', 'satFat', 'carbs', 'sugar', 'fibre', 'protein', 'salt', 'amount'].map((k) => [k, readNumber(fd, k)]));
@@ -586,7 +634,7 @@ forms.label = (fd, form) => {
   const extra = Object.fromEntries(['sugar', 'satFat', 'salt'].filter((k) => n[k] !== null).map((k) => [k, n[k]]));
   const food = {
     id, name, serving: `${n.per} g`, byGrams: true, grams: n.per, amount: n.amount && n.amount <= MAX_AMOUNT ? n.amount : n.per,
-    kcal, protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre, source: 'own',
+    kcal, protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre, source: form.dataset.scanned ? 'label' : 'own',
     ...(Object.keys(extra).length ? { extra } : {}),
   };
   const barcode = String(fd.get('barcode') ?? '');
@@ -678,6 +726,7 @@ actions['edit-food'] = (el) => {
   openSheet(`
     <form class="sheet-body" data-form="food" data-id="${esc(f.id ?? '')}" novalidate>
       <div class="card-title">${f.id ? 'Edit food' : 'New food'}</div>
+      ${f.id ? '' : '<button type="button" class="link" data-act="open-label">Have the pack? Copy its label instead</button>'}
       ${from.barcode ? `<input type="hidden" name="barcode" value="${esc(from.barcode)}">` : ''}
       ${textField('name', 'Name', f.name ?? ui.food.search)}
       ${textField('serving', 'One serving is', f.serving, 'For example "1 plate" or "100 g, from the pack".')}
@@ -695,6 +744,8 @@ actions['edit-food'] = (el) => {
       <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
     </form>`);
 };
+
+actions['open-label'] = () => openLabel(ui.food.search, '');
 
 forms.food = (fd, form) => {
   const c = ctx();

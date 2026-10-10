@@ -70,6 +70,10 @@ export function settingsBody() {
         <input name="usdaKey" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="80" value="${esc(c.plan.usdaKey ?? '')}">
         <small>Kept in your private data, not in the app's public code. It is also in your backup files. A lookup sends USDA the words you searched for and nothing else. A barcode scan sends Open Food Facts the barcode number and nothing else.</small>
       </label>
+      <label class="field"><span>Google AI key</span>
+        <input name="geminiKey" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="80" value="${esc(c.plan.geminiKey ?? '')}">
+        <small>For filling in a food from a photo of its nutrition label. Free from <a class="link" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>. Kept in your private data like the key above. The photo of the label is sent to Google and nothing else is. On the free plan Google may use it to improve its service.</small>
+      </label>
       <div class="form-error" role="alert" hidden></div>
       <button class="btn">Save</button>
     </form>
@@ -230,8 +234,10 @@ forms.gym = (fd) => {
 forms.lookups = (fd) => {
   const usdaKey = String(fd.get('usdaKey')).trim();
   if (usdaKey && !/^[A-Za-z0-9]{20,80}$/.test(usdaKey)) return 'That does not look like a USDA key. It is a long run of letters and numbers.';
-  store.setPlan({ usdaKey: usdaKey || null });
-  return { done: usdaKey ? 'Saved. Search for a food on the Food screen to try it.' : 'Removed.' };
+  const geminiKey = String(fd.get('geminiKey')).trim();
+  if (geminiKey && !/^[A-Za-z0-9_-]{20,80}$/.test(geminiKey)) return 'That does not look like a Google AI key. It is a long run of letters and numbers, usually starting with AIza.';
+  store.setPlan({ usdaKey: usdaKey || null, geminiKey: geminiKey || null });
+  return { done: 'Saved.' };
 };
 
 forms.rollover = (fd) => {

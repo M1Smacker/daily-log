@@ -712,6 +712,9 @@ button:disabled { opacity: 0.35; cursor: default; }
 .scan-box { position: relative; height: 190px; overflow: hidden; border-radius: 14px; background: var(--raised); }
 .scan-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .scan-box i { position: absolute; inset: 36% 16%; border: 2px solid var(--protein); border-radius: 10px; pointer-events: none; }
+.photo-btn { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.ok-ink { color: var(--protein); }
+.warn-ink { color: var(--amber); }
 .lookup { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; margin-top: 6px; border-top: 1px solid var(--line-strong); }
 .seg.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .seg.n3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }

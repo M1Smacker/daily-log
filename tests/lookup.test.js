@@ -48,3 +48,17 @@ test('fromOff: kilojoules are converted, drinks are per 100 ml, gaps stay unknow
 test('isBarcode: 8 to 14 digits only', () => {
   assert.deepEqual(['3017620422003', '12345678', '1234567', 'abc12345678', ''].map(isBarcode), [true, true, false, false, false]);
 });
+
+import { fromLabel } from '../js/lookup.js';
+
+test('fromLabel: a read label becomes values for the form', () => {
+  const v = fromLabel({ name: ' Crisps ', per: 100, energyKcal: 502, energyKj: 2100, fat: 30, satFat: 3, carbs: 55, sugar: 2, fibre: 4, protein: 6, salt: null, sodiumMg: 480 });
+  assert.deepEqual(v, { name: 'Crisps', per: 100, energy: 502, energyUnit: 'kcal', fat: 30, satFat: 3, carbs: 55, sugar: 2, fibre: 4, protein: 6, salt: 1.2, found: 4 });
+});
+
+test('fromLabel: kJ only, gaps stay empty, nonsense is dropped', () => {
+  const v = fromLabel({ per: null, energyKcal: null, energyKj: 2100, fat: 'lots', carbs: 900, protein: -1 });
+  assert.deepEqual([v.per, v.energy, v.energyUnit, v.fat, v.carbs, v.protein, v.salt, v.name, v.found], [100, 2100, 'kj', null, null, null, null, '', 1]);
+  assert.equal(fromLabel(null).found, 0);
+  assert.equal(fromLabel({ per: 30, fat: 31 }).fat, null); // more fat than the serving weighs
+});
