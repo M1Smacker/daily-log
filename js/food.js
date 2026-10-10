@@ -288,6 +288,7 @@ function openPick() {
       <div class="left-grid inset">${cell('kcal', 'kcal')}${cell('protein', 'protein', 'protein-ink')}${cell('carbs', 'carbs')}${cell('fat', 'fat')}</div>
       <button type="button" class="btn primary" data-act="add-food">${ui.food.picking ? 'Add to the recipe' : `Add to ${MEALS[meal(c)].toLowerCase()}`}</button>
       <button type="button" class="btn quiet" data-act="edit-food" data-id="${esc(f.id)}">${f.recipe ? 'Edit this recipe' : 'Edit this food'}</button>
+      <button type="button" class="btn quiet" data-act="delete-food" data-id="${esc(f.id)}">Remove from My foods</button>
       <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
     </div>`);
 }
@@ -573,6 +574,12 @@ forms.food = (fd, form) => {
 
 actions['delete-food'] = (el) => {
   const id = el.dataset.id;
+  // Two taps, so a slip does not lose a food. What was already logged stays logged either way.
+  if (el.dataset.sure !== '1') {
+    el.dataset.sure = '1';
+    el.textContent = 'Tap again to remove it';
+    return;
+  }
   sheet.close();
   ui.food.pick = null;
   ui.food.recipe = null;

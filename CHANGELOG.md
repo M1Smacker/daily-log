@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+- A saved food can be removed straight from the sheet it is picked on. Removing asks for a second tap.
+
 ## 0.8.0
 
 - Scan a barcode from the Add screen, or type the number under it. Packaged foods come from Open Food Facts and are saved to My foods. A product that is not listed opens New food with the barcode kept, so the next scan finds your own entry.
