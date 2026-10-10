@@ -1,18 +1,20 @@
 // The Workout screen, built for a phone that stays in the bag:
 //   1. On arrival: the session sheet. Every lift on one screen with today's weight. Nothing to tap.
 //   2. Afterwards: one tap, "Full session" or "Minimum".
-//   3. Then a short recap: per lift, the weight and the fewest reps on any set. That is all the
-//      jump rule needs to set next time's weights.
+//   3. Then the recap: per lift, every set with its weight and reps, saved with one button.
+//      That is what the jump rule sets next time's weights from.
 //
 // A day's workout is stored as:
-//   { session, minimum, finished, rirLo, half, lifts: { [exerciseId]: { kg, reps, alt, planned, top } } }
-// reps is the lowest reps of any set, planned the sets prescribed, top the top of the rep range that day.
+//   { session, minimum, finished, rirLo, half, lifts: { [exerciseId]: { sets: [{ kg, reps }], alt, planned, top } } }
+// planned is the sets prescribed that day, top the top of the rep range that day. A recap saved
+// before sets were logged one by one is { kg, reps, alt, planned, top }, with reps the fewest on
+// any set: rules.setsOf reads both.
 
 import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx } from './state.js';
 import { sessions, withSwaps, altKind, KINDS } from './exercises.js';
-import { sheet, esc, num, longDate, CHEVRON, actions, forms, app, field, readNumber } from './ui.js';
+import { esc, num, longDate, CHEVRON, actions, forms, app, closeSheet, field, readNumber } from './ui.js';
 
 const CARDIO = ['Easy bike', 'Bike intervals', 'Treadmill walk', 'Other'];
 const range = ([a, b], unit = '') => (a === b ? `${a}${unit}` : `${a} to ${b}${unit}`);
@@ -20,9 +22,9 @@ const clock = (sec) => `${Math.floor(sec / 60)}:${String(Math.max(0, sec) % 60).
 const restText = ([a, b]) => (b % 60 === 0 && a % 60 === 0 ? `${range([a / 60, b / 60])} min` : range([a, b], ' s'));
 const video = (name) => `https://www.youtube.com/results?search_query=${encodeURIComponent(`${name} form`)}`;
 
-// A recap line counts once it has reps. Every set is taken to be at least that good.
-export const logged = (lift) => lift?.reps > 0;
-export const asSets = (lift) => Array.from({ length: lift.planned ?? 1 }, () => ({ kg: lift.kg, reps: lift.reps }));
+// A lift counts as logged once one set has reps.
+export const asSets = rules.setsOf;
+export const logged = (lift) => asSets(lift).length > 0;
 
 // Everything the screen needs to know about the workout on one day.
 function view() {
@@ -69,7 +71,7 @@ function lastTime(c, id, key) {
     const w = c.data.days[k].workout;
     const lift = w?.lifts?.[id];
     if (logged(lift) && !lift.alt && !w.half) {
-      return { sets: asSets(lift), planned: lift.planned, rirLo: w.rirLo, top: lift.top, kg: lift.kg, reps: lift.reps };
+      return { sets: asSets(lift), planned: lift.planned, rirLo: w.rirLo, top: lift.top };
     }
   }
   return null;
@@ -96,6 +98,10 @@ function reason(v, ex) {
   else if (p.type === 'jump') html = note('Jump earned', `Last time every set reached the top of the range, so today is ${p.to} kg. Work back up from ${lo} reps.`);
   else if (p.type === 'extra') html = note('Nearly there', `The next step up is ${p.to} kg, a big jump from ${p.kg} kg. Reach ${p.need} reps on every set first.`);
   else if (p.type === 'cap') html = note('Heaviest dumbbell', `You have earned a jump, but ${p.kg} kg is the heaviest dumbbell.${ex.alt ? ` Switch to the alternative so this can keep getting heavier: ${esc(ex.alt)}.` : ''}`);
+  // Sets at different weights are judged at one of them. Say which, so the sheet's weight is no surprise.
+  if (p.kg && new Set(ex.last?.sets.map((s) => s.kg)).size > 1) {
+    html += note('More than one weight last time', `The sheet goes by the weight you did the most sets with, ${p.kg} kg. A heavier set counts as done. A lighter one means the weight stays for now. One weight for every set is easiest to build on.`);
+  }
   if (rules.wentBackwards(scores(v.c, ex.id, v.key))) {
     html += note('Two steps back', 'This lift has gone backwards two sessions in a row. Check sleep and food first. If those are fine, take an early deload week.', true);
   }
@@ -125,9 +131,9 @@ function sheetRow(v, ex) {
         <span class="target${ex.p.type === 'jump' ? ' up' : ''}"><b>${big}</b><small>${small}</small></span>
       </button>
       ${open ? `
-        <div class="sheet-more">
+        <div class="unfold${ui.fresh === ex.id ? ' fresh' : ''}"><div class="sheet-more">
           ${ex.note ? `<div class="muted" style="font-size:14px">${esc(ex.note)}</div>` : ''}
-          ${ex.last ? `<div class="muted" style="font-size:14px">Last time: ${ex.kind === 'body' ? '' : `${ex.last.kg} kg, `}at least ${ex.last.reps} reps on every set.</div>` : ''}
+          ${ex.last ? `<div class="muted" style="font-size:14px">Last time: ${rules.setsText(ex.last.sets)}.</div>` : ''}
           ${reason(v, ex)}
           ${ex.alt ? `<div class="note"><b>If it is busy</b>${esc(ex.alt)}. <a class="link" href="${video(ex.alt.split(',')[0])}" target="_blank" rel="noopener">Form video for this</a></div>` : ''}
           <div class="pair">
@@ -135,7 +141,7 @@ function sheetRow(v, ex) {
             <button type="button" class="btn compact" data-act="start-rest" data-sec="${ex.rest[1]}">Rest ${clock(ex.rest[1])}</button>
           </div>
           ${swapPart(ex)}
-        </div>` : ''}
+        </div></div>` : ''}
     </div>`;
 }
 
@@ -146,7 +152,7 @@ function swapPart(ex) {
   return `
     <details>
       <summary class="link">Your gym does not have this? Swap it</summary>
-      <form class="stack" data-form="swap-lift" novalidate>
+      <div class="unfold"><form class="stack" data-form="swap-lift" novalidate>
         <input type="hidden" name="id" value="${ex.id}">
         <label class="field"><span>Do this instead</span>
           <input name="name" type="text" maxlength="60" autocomplete="off" value="${esc(guess)}" required>
@@ -157,23 +163,78 @@ function swapPart(ex) {
           <small>This sets how the weight goes up. The new lift starts with no history.</small>
         </label>
         <button class="btn compact">Swap from now on</button>
-      </form>
+      </form></div>
     </details>`;
 }
 
 // One lift in the recap: the weight, and the fewest reps on any set.
-function recapRow(ex) {
-  const e = ex.entry ?? {};
+// ----- The recap: typed first, saved with the button -----
+// What is in the boxes but not saved yet is the draft: { key, lifts: { [id]: { rows: [[kg, reps]], alt } } }.
+// It is kept here and on the device, so a redraw, a sync from the other device, or the app being
+// closed before Save does not lose what was typed.
+const DRAFT_KEY = 'daily-log-recap-draft';
+const MAX_SETS = 8;
+
+function draftFor(key) {
+  if (ui.recap?.key === key) return ui.recap;
+  let kept = null;
+  try { kept = JSON.parse(localStorage.getItem(DRAFT_KEY)); } catch { /* none, or storage blocked */ }
+  ui.recap = kept && kept.key === key && kept.lifts && typeof kept.lifts === 'object' ? kept : null;
+  return ui.recap;
+}
+function dropDraft() {
+  ui.recap = null;
+  try { localStorage.removeItem(DRAFT_KEY); } catch { /* storage blocked */ }
+}
+// Copies what is in the boxes into the draft.
+function keepDraft(form) {
+  const lifts = {};
+  for (const box of form.querySelectorAll('[data-sets]')) {
+    lifts[box.dataset.sets] = {
+      rows: [...box.querySelectorAll('[data-f="reps"]')].map((r) => [kgBox(box, r.dataset.set)?.value ?? '', r.value]),
+      alt: Boolean(box.closest('.recap-row').querySelector('[data-alt]')?.checked),
+    };
+  }
+  ui.recap = { key: form.dataset.day, lifts };
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(ui.recap)); } catch { /* storage blocked: still kept while the app is open */ }
+  form.querySelector('[data-unsaved]').hidden = false;
+  const said = form.querySelector('.form-error');
+  if (said) said.hidden = true; // "Saved" is no longer true
+}
+const kgBox = (box, i) => box.querySelector(`[data-f="kg"][data-set="${i}"]`);
+
+// The rows to show for one lift: what was typed, or what was saved, or one empty row per planned
+// set with the sheet's weight already in it.
+function rowsFor(ex, draft) {
+  const typedRows = draft?.lifts?.[ex.id]?.rows;
+  if (Array.isArray(typedRows) && typedRows.length) {
+    return typedRows.slice(0, MAX_SETS).map((r) => [String(r?.[0] ?? ''), String(r?.[1] ?? '')]);
+  }
+  const saved = asSets(ex.entry);
+  return Array.from({ length: Math.max(ex.planned, saved.length) },
+    (_, i) => [String(saved[i]?.kg ?? saved.at(-1)?.kg ?? ex.target ?? ''), String(saved[i]?.reps ?? '')]);
+}
+
+const setRow = (ex, i, kg, reps) => `
+  <span class="set-n">${i + 1}</span>
+  ${ex.kind === 'body' ? '' : `<input type="text" inputmode="decimal" autocomplete="off" value="${esc(kg)}" data-f="kg" data-set="${i}" aria-label="${esc(ex.name)}, set ${i + 1}, weight in kg">`}
+  <input type="text" inputmode="numeric" autocomplete="off" value="${esc(reps)}" data-f="reps" data-set="${i}" aria-label="${esc(ex.name)}, set ${i + 1}, reps">`;
+
+// One lift in the recap: a line per set, each with its own weight and reps.
+function recapRow(ex, draft) {
   const body = ex.kind === 'body';
-  const input = (f, value, mode, label) =>
-    `<label class="recap-field"><span>${label}</span><input type="text" inputmode="${mode}" autocomplete="off" value="${value ?? ''}" data-lift="${ex.id}" data-f="${f}"></label>`;
+  const typedLift = draft?.lifts?.[ex.id];
+  const alt = typedLift ? Boolean(typedLift.alt) : Boolean(ex.entry?.alt);
   return `
     <div class="recap-row">
       <div class="lift-text"><b>${esc(ex.name)}</b><small>${ex.planned} x ${range(ex.reps)}${ex.target ? `, sheet said ${ex.target} kg` : ''}</small></div>
-      <div class="recap-fields">
-        ${body ? '<span class="recap-field"><span>Kg</span><i class="set-bw">BW</i></span>' : input('kg', e.kg ?? ex.target, 'decimal', ex.kind === 'dumbbell' ? 'Kg each' : 'Kg')}
-        ${input('reps', e.reps, 'numeric', 'Fewest reps')}
-        ${ex.alt ? `<label class="tick alt-tick"><input type="checkbox" data-alt="${ex.id}" ${e.alt ? 'checked' : ''}>Alt</label>` : '<span></span>'}
+      <div class="set-grid${body ? ' body' : ''}" data-sets="${ex.id}" data-kind="${ex.kind}">
+        <span></span>${body ? '' : `<span class="set-h">${ex.kind === 'dumbbell' ? 'Kg each' : 'Kg'}</span>`}<span class="set-h">Reps</span>
+        ${rowsFor(ex, draft).map(([kg, reps], i) => setRow(ex, i, kg, reps)).join('')}
+      </div>
+      <div class="recap-foot">
+        <button type="button" class="link" data-act="add-set">Add a set</button>
+        ${ex.alt ? `<label class="tick"><input type="checkbox" data-alt="${ex.id}" ${alt ? 'checked' : ''}>Did the alternative</label>` : ''}
       </div>
     </div>`;
 }
@@ -203,10 +264,12 @@ export function workoutView() {
   const rir = rules.targetRir(v.phase, v.key);
   const past = v.isToday ? '' : `<div class="note"><b>A past session</b>${longDate(v.key)}. <button type="button" class="link" data-act="workout-today">Back to today</button></div>`;
   const rest = `
-    <div class="rest-bar" id="rest" hidden>
-      <span class="small">Rest</span><span class="big" data-rest-time></span>
-      <button type="button" class="btn compact" data-act="rest-more">+30 s</button>
-      <button type="button" class="btn compact" data-act="rest-skip">Skip</button>
+    <div class="rest-slot${ui.rest ? ' on' : ''}" id="rest">
+      <div class="rest-bar">
+        <span class="small">Rest</span><span class="big" data-rest-time></span>
+        <button type="button" class="btn compact" data-act="rest-more">+30 s</button>
+        <button type="button" class="btn compact" data-act="rest-skip">Skip</button>
+      </div>
     </div>`;
 
   const sheetPart = `
@@ -242,19 +305,22 @@ export function workoutView() {
     </div>`;
 
   const filledIn = v.lifts.filter((ex) => logged(ex.entry)).length;
+  const draft = v.w.finished ? draftFor(v.key) : null;
   const recapPart = `
     ${past}
     <div class="note"><b>${v.w.minimum ? 'Minimum session' : 'Full session'} saved</b>${filledIn === v.lifts.length
       ? 'Recap complete. Next time\'s weights are set from it.'
       : 'The recap below sets next time\'s weights. Fill it in when you can.'}
       <button type="button" class="link" data-act="reopen-workout">Not done after all? Reopen it</button></div>
-    <section class="card">
+    <form class="card" data-form="recap" data-day="${v.key}" novalidate>
       <span class="card-title">Recap</span>
-      <span class="card-tag">${filledIn} of ${v.lifts.length}</span>
-      <div class="muted" style="font-size:14px">For each lift: the weight, and the fewest reps you got on any set. Leave a lift blank if you skipped it. Tick Alt if you did the alternative.</div>
-      <div>${v.lifts.map(recapRow).join('')}</div>
-      <div class="small muted">It saves as you type.</div>
-    </section>`;
+      <span class="card-tag">${filledIn} of ${v.lifts.length} saved</span>
+      <div class="muted" style="font-size:14px">For each set: the weight you used and the reps you got. Did more sets than the sheet said? Add a set. Leave the reps empty for a set or a lift you skipped.</div>
+      <div>${v.lifts.map((ex) => recapRow(ex, draft)).join('')}</div>
+      <div class="small warn-ink" data-unsaved ${draft ? '' : 'hidden'}>Not saved yet. <button type="button" class="link" data-act="drop-recap">Throw these changes away</button></div>
+      <button class="btn primary">Save recap</button>
+      <div class="small muted">Nothing here is saved until you tap Save recap.</div>
+    </form>`;
 
   return {
     title: v.session.name,
@@ -272,34 +338,67 @@ function current() {
 }
 const put = (v, w, quiet = false) => store.setDay(v.key, { workout: w }, quiet);
 const typed = (s) => {
-  const n = Number(String(s).trim().replace(',', '.'));
-  return String(s).trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 1000 ? n : null;
+  const n = rules.typedNumber(s);
+  return n !== null && n <= 1000 ? n : null;
 };
 
-// The recap saves the moment a box is left, quietly, so the next box keeps the keyboard.
-document.addEventListener('change', (e) => {
-  const t = e.target;
-  const id = t.dataset?.lift ?? t.dataset?.alt;
-  if (!id) return;
-  const { v, w } = current();
-  const ex = v.lifts.find((l) => l.id === id);
-  if (!ex) return;
-  const lift = (w.lifts ??= {})[id] ??= {};
-  lift.planned = ex.planned;
-  lift.top = ex.reps[1];
-  if (t.dataset.alt) lift.alt = t.checked;
-  else {
-    const n = typed(t.value);
-    if (n === null) delete lift[t.dataset.f];
-    else lift[t.dataset.f] = t.dataset.f === 'reps' ? Math.round(n) : n;
-    // The weight box may be showing the sheet's weight, never typed: keep it with the reps.
-    if (t.dataset.f === 'reps' && lift.reps > 0 && lift.kg == null && ex.kind !== 'body') {
-      const kg = typed(document.querySelector(`[data-lift="${id}"][data-f="kg"]`)?.value ?? '');
-      if (kg > 0) lift.kg = kg;
-    }
-  }
-  put(v, w, true);
+// Typing in the recap only fills the draft. A weight typed into one set carries down to the sets
+// after it that still held the same weight, so a change of weight is typed once.
+document.addEventListener('focusin', (e) => {
+  if (e.target.matches?.('[data-sets] [data-f="kg"]')) e.target.dataset.was = e.target.value;
 });
+document.addEventListener('input', (e) => {
+  const form = e.target.closest?.('[data-form="recap"]');
+  if (!form) return;
+  const t = e.target;
+  if (t.dataset.f === 'kg') {
+    const box = t.closest('[data-sets]');
+    for (const later of box.querySelectorAll('[data-f="kg"]')) {
+      if (Number(later.dataset.set) > Number(t.dataset.set) && later.value === t.dataset.was) later.value = t.value;
+    }
+    t.dataset.was = t.value;
+  }
+  keepDraft(form);
+});
+
+actions['add-set'] = (el) => {
+  const box = el.closest('.recap-row').querySelector('[data-sets]');
+  const n = box.querySelectorAll('[data-f="reps"]').length;
+  if (n >= MAX_SETS) return;
+  const ex = { kind: box.dataset.kind, name: el.closest('.recap-row').querySelector('.lift-text b').textContent };
+  // The new set starts at the weight of the one before it.
+  box.insertAdjacentHTML('beforeend', setRow(ex, n, kgBox(box, n - 1)?.value ?? '', ''));
+  box.querySelector(`[data-f="reps"][data-set="${n}"]`).focus();
+  keepDraft(el.closest('form'));
+};
+actions['drop-recap'] = () => { dropDraft(); app.redraw(); };
+
+forms.recap = (fd, form) => {
+  const { v, w } = current();
+  const lifts = { ...w.lifts };
+  for (const ex of v.lifts) {
+    const box = [...form.querySelectorAll('[data-sets]')].find((b) => b.dataset.sets === ex.id);
+    if (!box) continue;
+    const sets = [];
+    for (const r of box.querySelectorAll('[data-f="reps"]')) {
+      if (r.value.trim() === '') continue; // a set that was not done
+      const at = `${ex.name}, set ${Number(r.dataset.set) + 1}`;
+      const reps = typed(r.value);
+      if (reps === null || reps < 1 || !Number.isInteger(reps)) return `${esc(at)}: the reps need to be a whole number, 1 or more.`;
+      if (ex.kind === 'body') { sets.push({ reps }); continue; }
+      const kg = typed(kgBox(box, r.dataset.set)?.value ?? '');
+      if (!(kg > 0)) return `${esc(at)}: type the weight you used.`;
+      sets.push({ kg, reps });
+    }
+    const alt = Boolean(box.closest('.recap-row').querySelector('[data-alt]')?.checked);
+    if (sets.length) lifts[ex.id] = { sets, planned: ex.planned, top: ex.reps[1], ...(alt ? { alt: true } : {}) };
+    else delete lifts[ex.id];
+  }
+  w.lifts = lifts;
+  dropDraft();
+  put(v, w);
+  return { done: 'Saved. The next sheet sets its weights from this.' };
+};
 
 // Two muscles at most. Picking a third drops the oldest pick.
 actions['pick-extra'] = (el) => {
@@ -319,7 +418,7 @@ actions['unswap-lift'] = (el) => {
   ui.openLift = null;
   store.setPlan({ swaps });
 };
-actions['open-lift'] = (el) => { ui.openLift = ui.openLift === el.dataset.ex ? null : el.dataset.ex; app.redraw(); };
+actions['open-lift'] = (el) => { ui.openLift = ui.openLift === el.dataset.ex ? null : el.dataset.ex; ui.fresh = ui.openLift; app.redraw(); };
 actions['toggle-minimum'] = () => {
   const { v, w } = current();
   w.minimum = !w.minimum;
@@ -333,26 +432,28 @@ actions['finish-workout'] = (el) => {
   w.finished = true;
   ui.rest = null;
   ui.openLift = null;
+  ui.nextEnter = 'from-right'; // on to the recap
   store.setDay(v.key, { workout: w, session: { type: w.minimum ? 'min' : 'done' } });
   scrollTo(0, 0);
 };
 actions['reopen-workout'] = () => {
   const { v, w } = current();
   w.finished = false;
+  ui.nextEnter = 'from-left'; // back to the sheet
   store.setDay(v.key, { workout: w, session: null });
 };
-actions['workout-today'] = () => { ui.workoutDay = null; ui.openLift = null; app.redraw(); };
+actions['workout-today'] = () => { ui.workoutDay = null; ui.openLift = null; ui.nextEnter = 'from-right'; app.redraw(); };
 // From Today and from the day sheet.
 actions['start-workout'] = (el) => {
   ui.workoutDay = el.dataset.day ?? null;
   ui.wantMinimum = el.dataset.minimum === 'true';
   ui.openLift = null;
-  sheet.close();
+  closeSheet();
   if (ui.wantMinimum) {
     const { v, w } = current();
     if (!w.minimum && !w.finished) { w.minimum = true; put(v, w, true); }
   }
-  if (location.hash === '#workout') app.redraw();
+  if (location.hash === '#workout') { ui.nextEnter = 'from-left'; app.redraw(); }
   else location.hash = 'workout';
 };
 
@@ -389,10 +490,10 @@ function tick() {
   const left = ui.rest ? Math.ceil((ui.rest.endsAt - Date.now()) / 1000) : null;
   if (left === null || ui.rest.endsAt + OVER_SHOWS_MS < Date.now()) {
     ui.rest = null;
-    bar.hidden = true;
+    bar.classList.remove('on'); // the last time stays on it while it slides away
     return;
   }
-  bar.hidden = false;
+  bar.classList.add('on');
   bar.classList.toggle('over', left <= 0);
   bar.querySelector('[data-rest-time]').textContent = left > 0 ? clock(left) : 'Rest over';
 }

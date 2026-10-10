@@ -3,7 +3,7 @@
 import * as rules from './rules.js';
 import * as store from './store.js';
 import { ctx } from './state.js';
-import { esc, num, fmt, shortDate, forms, actions, field, readNumber, openSheet, sheet } from './ui.js';
+import { esc, num, fmt, shortDate, forms, actions, field, readNumber, openSheet, closeSheet } from './ui.js';
 import { plan as basePlan } from './plan.js';
 import { VERSION } from './version.js';
 import { sessions } from './exercises.js';
@@ -215,7 +215,7 @@ document.addEventListener('change', async (e) => {
 });
 
 actions['do-restore'] = async () => {
-  sheet.close();
+  closeSheet();
   const text = pendingText;
   pendingText = null;
   if (!text) return;

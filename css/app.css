@@ -24,6 +24,7 @@
   --card-bg: var(--ground);
   --nav-space: calc(92px + env(safe-area-inset-bottom));
   --ease: cubic-bezier(0.3, 0.7, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* the page change. Anything that arrives or leaves uses it too */
 }
 
 * { box-sizing: border-box; }
@@ -401,10 +402,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .page.from-left { --dx: -36px; }
 .page.from-below { --dy: 28px; }
 .page.from-above { --dy: -20px; }
-.page[class*='from-'] { animation: page-in 0.38s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+.page[class*='from-'] { animation: page-in 0.38s var(--ease-out) backwards; }
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @keyframes dim-in { from { opacity: 0; } }
-.sheet[open] { animation: sheet-up 0.36s cubic-bezier(0.16, 1, 0.3, 1); }
+.sheet[open] { animation: sheet-up 0.36s var(--ease-out); }
 .sheet[open]::backdrop { animation: dim-in 0.25s ease-out; }
 
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -502,9 +503,10 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   text-transform: uppercase;
   color: var(--muted);
 }
-.set-bw { font: 700 18px/48px var(--display); color: var(--muted); }
 .note b { display: block; margin-bottom: 2px; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
 .note.warn { border-left: 2px solid var(--amber); }
+/* A link in a note sits on its own line: its tall tap area would push the lines of text apart. */
+.note .link { display: flex; }
 .note .tick { margin-top: 6px; }
 .link { padding: 0; border: 0; background: none; color: var(--text); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; display: inline-flex; align-items: center; min-height: 44px; }
 .lift-n { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--raised); display: flex; align-items: center; justify-content: center; font: 700 18px/1 var(--display); }
@@ -524,10 +526,14 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .sheet-more { display: flex; flex-direction: column; gap: 10px; padding: 0 0 14px 46px; }
 .recap-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--line); }
 .recap-row:first-child { border-top: 0; }
-.recap-fields { display: grid; grid-template-columns: 1fr 1fr 64px; gap: 8px; align-items: end; }
-.recap-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.recap-field > span { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-.recap-field input {
+/* The recap: one line per set. The set number, its weight, its reps. */
+.set-grid { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 8px; align-items: center; }
+.set-grid.body { grid-template-columns: 28px 1fr; }
+.set-h { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); text-align: center; }
+.set-n { font: 700 20px/1 var(--display); color: var(--muted); text-align: center; }
+.recap-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.recap-foot .tick { font-size: 14px; }
+.set-grid input {
   width: 100%;
   min-width: 0;
   height: 48px;
@@ -539,9 +545,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   font: 700 24px/1 var(--display);
   text-align: center;
 }
-.recap-field input:focus-visible { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.recap-field .set-bw { font-style: normal; text-align: center; }
-.alt-tick { justify-content: center; min-height: 48px; font-size: 14px; }
+.set-grid input:focus-visible { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
 .switch-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 16px; border: 1px solid var(--line-strong); border-radius: 18px; }
 .switch { flex: none; position: relative; width: 56px; height: 44px; padding: 0; border: 0; background: none; }
@@ -553,9 +557,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .cardio-row { align-items: center; }
 /* The rest timer rides just under the floating controls while you log. */
 .rest-bar {
-  position: sticky;
-  top: calc(64px + env(safe-area-inset-top));
-  z-index: 2;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -569,7 +570,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 .rest-bar .big { flex: 1; font-size: 30px; }
 .rest-bar .btn { border-radius: 999px; padding: 0 16px; }
-.rest-bar.over .big { color: var(--protein); font-size: 22px; text-transform: uppercase; }
+.rest-slot.over .big { color: var(--protein); font-size: 22px; text-transform: uppercase; }
 @media (prefers-reduced-motion: reduce) { .switch::before, .switch i { transition: none; } }
 
 /* Progress */
@@ -755,3 +756,54 @@ button:disabled { opacity: 0.35; cursor: default; }
 .weeks thead th { padding-top: 0; border-top: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .weeks tbody th { font-weight: 600; }
 .weeks tbody th small { display: block; font-size: 12px; font-weight: 400; color: var(--muted); }
+
+/* ----- Motion for things that open, close and change inside a page ----- */
+/* Everything here moves on the same curve as the page change, so it reads as one family. */
+
+/* Buttons give a little under the finger. */
+.btn, .chip, .icon-btn, .pill, .seg button { transition: transform 0.14s var(--ease-out); }
+:is(.btn, .chip, .icon-btn, .pill, .seg button):active:not(:disabled) { transform: scale(0.97); }
+
+/* The sheet goes back down the way it came up. The time matches CLOSE_MS in js/ui.js. */
+@keyframes sheet-down { to { transform: translateY(100%); } }
+@keyframes dim-out { to { opacity: 0; } }
+.sheet.closing { animation: sheet-down 0.24s var(--ease) forwards; pointer-events: none; }
+.sheet.closing::backdrop { animation: dim-out 0.24s ease-out forwards; }
+
+/* The rest timer slides out from under the floating controls, and back. Closed, it takes no room:
+   the slot has no height and takes back the gap the page would give it. */
+.rest-slot {
+  position: sticky;
+  top: calc(64px + env(safe-area-inset-top));
+  z-index: 2;
+  height: 0;
+  margin-bottom: -24px;
+  transition: height 0.3s var(--ease-out), margin-bottom 0.3s var(--ease-out);
+}
+.rest-slot.on { height: 58px; margin-bottom: 0; }
+.rest-slot .rest-bar { opacity: 0; visibility: hidden; transform: translateY(-12px) scale(0.98); transition: opacity 0.2s ease-out, transform 0.3s var(--ease-out), visibility 0s 0.3s; }
+.rest-slot.on .rest-bar { opacity: 1; visibility: visible; transform: none; transition-delay: 0s; }
+
+/* A part that folds open grows to its own height. Its content is clipped only while it opens. */
+.unfold { display: grid; grid-template-rows: 1fr; }
+.unfold > * { min-height: 0; min-width: 0; }
+.unfold.fresh { animation: unfold 0.28s var(--ease-out); }
+.unfold.fresh > * { overflow: hidden; }
+@keyframes unfold { from { grid-template-rows: 0fr; opacity: 0; } }
+
+/* A part that is swapped for another settles in. Messages and the update prompt arrive the same way. */
+@keyframes settle { from { opacity: 0; transform: translateY(8px); } }
+.settle.fresh { animation: settle 0.3s var(--ease-out); }
+.form-error:not([hidden]) { animation: settle 0.22s var(--ease-out); }
+@keyframes update-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+.update:not([hidden]) { animation: update-in 0.3s var(--ease-out); }
+
+/* A bar's fill is as wide as its track and slid left by what is still to go. It glides from
+   where it last stood (--from) to where it is now (--to). */
+.bar > i { width: 100%; transform: translateX(calc(var(--to, 0%) - 100%)); animation: bar-glide 0.35s var(--ease) backwards; }
+@keyframes bar-glide { from { transform: translateX(calc(var(--from, 0%) - 100%)); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn, .chip, .icon-btn, .pill, .seg button, .rest-slot, .rest-slot .rest-bar { transition: none; }
+  .unfold.fresh, .settle.fresh, .form-error:not([hidden]), .update:not([hidden]), .bar > i { animation: none; }
+}

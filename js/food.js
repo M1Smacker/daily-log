@@ -8,7 +8,7 @@
 import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx as appCtx } from './state.js';
-import { sheet, esc, num, shortDate, longDate, actions, forms, app, openSheet, field, readNumber } from './ui.js';
+import { sheet, esc, num, shortDate, longDate, actions, forms, app, openSheet, closeSheet, field, readNumber } from './ui.js';
 import * as lookup from './lookup.js';
 import { foods as preloaded } from './foods.js';
 
@@ -254,16 +254,18 @@ actions['food-day'] = (el) => {
   const c = ctx();
   const next = rules.addDays(c.key, Number(el.dataset.dir));
   ui.food.day = next >= c.today ? null : next;
+  ui.nextEnter = Number(el.dataset.dir) < 0 ? 'from-left' : 'from-right'; // days run left to right
   app.redraw();
 };
-actions['food-today'] = () => { ui.food.day = null; app.redraw(); };
+actions['food-today'] = () => { ui.food.day = null; ui.nextEnter = 'from-right'; app.redraw(); };
 
 actions['open-add'] = (el) => {
   ui.food = { ...ui.food, meal: el.dataset.meal, adding: true, search: '' };
+  ui.nextEnter = 'from-below'; // the Add screen rises, like Settings and the Guide
   app.redraw();
   scrollTo(0, 0);
 };
-actions['close-add'] = () => { ui.food = { ...ui.food, adding: false, search: '' }; app.redraw(); scrollTo(0, 0); };
+actions['close-add'] = () => { ui.food = { ...ui.food, adding: false, search: '' }; ui.nextEnter = 'from-above'; app.redraw(); scrollTo(0, 0); };
 actions['pick-list'] = (el) => { ui.food.list = el.dataset.list; ui.food.search = ''; app.redraw(); };
 
 document.addEventListener('input', (e) => {
@@ -387,10 +389,11 @@ actions['add-food'] = () => {
   const entry = entryFrom(f, amount, unit, meal(c));
   ui.food.pick = null;
   ui.food.search = '';
-  sheet.close();
+  closeSheet();
   if (ui.food.picking) {
     ui.food.recipe.items.push(entry);
     ui.food.picking = false;
+    ui.nextEnter = 'from-left'; // back to the recipe
     app.redraw();
   } else log(c, [entry]);
 };
@@ -834,7 +837,7 @@ forms.entry = (fd, form) => {
 
 actions['delete-entry'] = (el) => {
   const c = ctx();
-  sheet.close();
+  closeSheet();
   store.changeList(c.key, 'food', (c.day.food ?? []).filter((e) => e.id === el.dataset.id), true);
 };
 
@@ -916,7 +919,7 @@ actions['delete-food'] = (el) => {
     el.textContent = 'Tap again to remove it';
     return;
   }
-  sheet.close();
+  closeSheet();
   ui.food.pick = null;
   // Only the recipe being removed is closed. One being built, with this food looked at as an
   // ingredient, stays open with what is already in it.
@@ -930,7 +933,8 @@ actions['delete-food'] = (el) => {
 // so it can be edited later: { servings, potGrams, items: [entries] }.
 
 function openRecipe(f) {
-  sheet.close();
+  closeSheet();
+  ui.nextEnter = 'from-below';
   ui.food.pick = null;
   ui.food.recipe = f
     ? { id: f.id, name: f.name, servings: f.recipe.servings, potGrams: f.recipe.potGrams ?? '', items: structuredClone(f.recipe.items) }
@@ -987,9 +991,9 @@ function recipeScreen() {
     </form>`;
 }
 
-actions['close-recipe'] = () => { ui.food.recipe = null; ui.food.picking = false; app.redraw(); scrollTo(0, 0); };
-actions['recipe-add'] = () => { ui.food.picking = true; ui.food.search = ''; app.redraw(); scrollTo(0, 0); };
-actions['recipe-back'] = () => { ui.food.picking = false; ui.food.search = ''; app.redraw(); };
+actions['close-recipe'] = () => { ui.food.recipe = null; ui.food.picking = false; ui.nextEnter = 'from-above'; app.redraw(); scrollTo(0, 0); };
+actions['recipe-add'] = () => { ui.food.picking = true; ui.food.search = ''; ui.nextEnter = 'from-right'; app.redraw(); scrollTo(0, 0); };
+actions['recipe-back'] = () => { ui.food.picking = false; ui.food.search = ''; ui.nextEnter = 'from-left'; app.redraw(); };
 actions['recipe-remove'] = (el) => { ui.food.recipe.items.splice(Number(el.dataset.i), 1); app.redraw(); };
 
 forms.recipe = () => {
@@ -1009,6 +1013,7 @@ forms.recipe = () => {
   };
   if (potGrams) food.grams = Math.round(potGrams / servings);
   ui.food = { ...ui.food, recipe: null, picking: false, list: 'recipes' };
+  ui.nextEnter = 'from-above';
   store.setFood(id, food);
   scrollTo(0, 0);
 };

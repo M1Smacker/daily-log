@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.12.0
+
+Workout recap:
+
+- The recap now takes every set on its own line, each with its weight and its reps. "Add a set" is there for when more sets were done than the sheet asked for.
+- Nothing is saved until Save recap is tapped. What has been typed is kept on the phone until then, so closing the app before Save does not lose it, and "Not saved yet" shows while it waits.
+- A weight typed into one set carries down to the sets after it that still held the old weight.
+- When the sets of a lift were not all at one weight, the next sheet goes by the weight most sets were done with (the lighter one on a tie). A heavier set counts as done. A lighter set means the weight stays. The lift says so when it is opened.
+- Recaps saved before this, with one weight and the fewest reps, still read correctly and can be corrected set by set.
+
+Motion, for the things that used to pop in and out:
+
+- The rest timer slides out from under the top controls and back, and the page makes room for it smoothly.
+- A sheet now slides back down when it closes, the way it came up.
+- Screens that change inside one tab move like a page change: the Add screen and recipes on Food, stepping to another day, finishing a session and going on to the recap.
+- A lift's details, a guide topic and the swap form unfold to their height. The full calendar and the week strip settle in when they swap.
+- Progress bars glide from where they stood to their new place.
+- Messages such as "Saved" and the update prompt arrive softly, and buttons give a little when pressed.
+- All of it is switched off for anyone who has asked their phone for less motion.
+
 ## 0.11.0
 
 New:

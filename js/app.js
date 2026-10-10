@@ -4,7 +4,7 @@
 import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx } from './state.js';
-import { view, sheet, esc, shortDate, longDate, SETTINGS, CHEVRON_RIGHT, BACK, CHEVRON, actions, forms, app } from './ui.js';
+import { view, sheet, esc, shortDate, longDate, SETTINGS, CHEVRON_RIGHT, BACK, CHEVRON, actions, forms, app, closeSheet } from './ui.js';
 import { todayBody } from './today.js';
 import { foodBody } from './food.js';
 import { setupBody, settingsBody } from './settings.js';
@@ -37,7 +37,7 @@ function frame(c, title, body, { sub, back = false, bare = false } = {}) {
 const topic = (title, body, extra = '', open = false) => `
   <details class="topic"${open ? ' open' : ''}>
     <summary><span>${title}${extra}</span>${CHEVRON}</summary>
-    <div class="topic-body">${body}</div>
+    <div class="unfold"><div class="topic-body">${body}</div></div>
   </details>`;
 
 function guideBody(c) {
@@ -125,7 +125,9 @@ function render(nav = true) {
   if (nav && tab !== 'workout' && ui.tab === 'workout') ui.workoutDay = null;
   // The same for an earlier day on the Food tab, so food is never logged on the wrong day by accident.
   if (nav && tab !== 'food' && ui.tab === 'food') ui.food.day = null;
-  ui.enter = nav && ui.tab && ui.tab !== tab ? enterFrom(ui.tab, tab) : '';
+  // A tab change comes in from its side. A screen change inside a tab says which side itself.
+  ui.enter = nav && ui.tab && ui.tab !== tab ? enterFrom(ui.tab, tab) : (!nav && ui.nextEnter) || '';
+  ui.nextEnter = null;
   ui.tab = tab;
 
   if (tab === 'today') frame(c, 'Today', todayBody());
@@ -147,6 +149,7 @@ function render(nav = true) {
   if (index >= 0) tabs.style.setProperty('--i', index);
   tabs.classList.toggle('none', index < 0);
   paintStatus();
+  ui.fresh = null; // the part that just opened has been drawn opening, once
   if (nav) scrollTo(0, 0);
 }
 
@@ -216,11 +219,22 @@ document.addEventListener('submit', async (e) => {
     box.hidden = false;
     box.classList.toggle('ok', Boolean(result.done));
     box.innerHTML = result.done ? esc(result.done) : result;
-  } else if (sheet.contains(form)) sheet.close();
+  } else if (sheet.contains(form)) closeSheet();
 });
 
 // Tapping the dimmed area around the sheet closes it.
-sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.close(); });
+sheet.addEventListener('click', (e) => { if (e.target === sheet) closeSheet(); });
+
+// ----- Small motion helpers -----
+// A fold-out (a guide topic, a swap form) opens with its height: mark it just before it shows.
+document.addEventListener('click', (e) => {
+  const details = e.target.closest?.('summary')?.parentElement;
+  if (details && !details.open) details.querySelector(':scope > .unfold')?.classList.add('fresh');
+});
+// Once something has finished opening it is ordinary again, and nothing inside it stays clipped.
+document.addEventListener('animationend', (e) => e.target.classList?.remove('fresh'));
+// iPhones only show a button as pressed when the page listens for touches.
+document.addEventListener('touchstart', () => {}, { passive: true });
 
 // The app stays open in the background for days on a phone. When it comes back to the front,
 // or the clock passes the rollover, redraw so "today" is really today. Without this a morning

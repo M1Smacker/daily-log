@@ -158,8 +158,12 @@ function liftsCard(c) {
     const w = c.data.days[k].workout;
     for (const [id, lift] of Object.entries(w?.lifts ?? {})) {
       if (!logged(lift) || lift.alt || w.half) continue;
-      // Bodyweight lifts have no weight, so their line follows reps.
-      (history[id] ??= []).push({ key: k, top: lift, score: lift.kg ? rules.bestSet(asSets(lift)) : lift.reps });
+      const sets = asSets(lift);
+      // The best set of the day. Bodyweight lifts have no weight, so their line follows the
+      // fewest reps on any set.
+      const weighted = sets.some((s) => s.kg > 0);
+      const best = weighted ? sets.reduce((a, s) => (rules.bestSet([s]) > rules.bestSet([a]) ? s : a)) : { reps: Math.min(...sets.map((s) => s.reps)) };
+      (history[id] ??= []).push({ key: k, top: best, score: weighted ? rules.bestSet(sets) : best.reps });
     }
   }
   const rows = Object.entries(history).filter(([, h]) => h.length >= 2).map(([id, h]) => {
@@ -372,12 +376,12 @@ export function claudeText(c) {
   }
   // Finished sessions only: a sheet that was opened and never trained is not a session.
   const recent = Object.keys(c.data.days).sort().reverse().filter((k) => c.data.days[k].workout?.finished).slice(0, 4);
-  if (recent.length) lines.push('', 'Recent sessions (lift: weight, sets, fewest reps on any set):');
+  if (recent.length) lines.push('', 'Recent sessions (each lift set by set, weight x reps):');
   for (const k of recent.reverse()) {
     const w = c.data.days[k].workout;
     lines.push(`${k} ${w.session}${w.minimum ? ' (minimum)' : ''}`);
     for (const [id, lift] of Object.entries(w.lifts)) {
-      if (logged(lift)) lines.push(`  ${liftName(id)}${lift.alt ? ' (alternative used)' : ''}: ${lift.kg ?? 'bodyweight'}${lift.kg ? ' kg' : ''}, ${lift.planned} sets, at least ${lift.reps} reps on each`);
+      if (logged(lift)) lines.push(`  ${liftName(id)}${lift.alt ? ' (alternative used)' : ''}: ${rules.setsText(asSets(lift))}${lift.planned ? `, sheet said ${lift.planned} sets` : ''}`);
     }
   }
   return lines.join('\n');

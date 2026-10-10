@@ -4,8 +4,8 @@ import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx } from './state.js';
 import {
-  view, sheet, esc, num, pct, fmt, shortDate, longDate, litres, DOW, TICK, CHEVRON,
-  actions, forms, app, openSheet, field, readNumber,
+  view, esc, num, fmt, shortDate, longDate, litres, DOW, TICK, CHEVRON,
+  actions, forms, app, openSheet, closeSheet, fill, field, readNumber,
 } from './ui.js';
 
 const GAP_SESSIONS = 4; // missed in a row before offering to push the phases back
@@ -74,7 +74,7 @@ function weekCard(c, days) {
   const strip = rules.weekStrip(days, c.key, c.plan.weekStartDow).map((d) => dayCell(c, d, true)).join('');
   return `
     <section class="week-card" aria-label="${open ? 'Full plan' : 'This week'}">
-      ${open ? calendar(c, days) : `<div class="strip">${strip}</div>`}
+      <div class="settle${ui.fresh === 'calendar' ? ' fresh' : ''}">${open ? calendar(c, days) : `<div class="strip">${strip}</div>`}</div>
       <button type="button" class="fold${open ? ' open' : ''}" data-act="toggle-calendar" aria-expanded="${open}">
         ${open ? 'Back to this week' : 'Show the full plan'}${CHEVRON}
       </button>
@@ -182,7 +182,7 @@ function calories(c, eaten) {
   const macro = (name, m) => `
     <div class="macro">
       <div class="row"><span>${name}</span><span class="muted"><b>${num(eaten[m])}</b> of ${num(t[m])} g</span></div>
-      <div class="bar ${m}"><i style="width:${pct(eaten[m], t[m])}%"></i></div>
+      <div class="bar ${m}">${fill(m, eaten[m], t[m])}</div>
     </div>`;
   const gap = rules.biggestGap(t, eaten);
   const remaining = rules.left(t.kcal, eaten.kcal);
@@ -196,7 +196,7 @@ function calories(c, eaten) {
         <span class="kcal-left">${remaining >= 0 ? `${num(remaining)} left` : `${num(-remaining)} over`}</span>
       </div>
       <div><span class="big">${num(eaten.kcal)}</span><span class="muted"> of ${num(t.kcal)} kcal</span></div>
-      <div class="bar tall"><i style="width:${pct(eaten.kcal, t.kcal)}%"></i></div>
+      <div class="bar tall">${fill('kcal', eaten.kcal, t.kcal)}</div>
       <div class="macros">${macro('Protein', 'protein')}${macro('Carbs', 'carbs')}${macro('Fat', 'fat')}</div>
       <div class="row small muted"><span>${note}</span><span>Fibre ${num(eaten.fibre)} of ${num(t.fibre)} g</span></div>
       <a class="btn compact" href="#food">Log food</a>
@@ -214,14 +214,14 @@ function smallCards(c) {
         <span class="card-title">Steps</span>
         <span class="big">${num(steps)}</span>
         <span class="small muted sub">of ${num(stepGoal)} today</span>
-        <div class="bar"><i style="width:${pct(steps, stepGoal)}%"></i></div>
+        <div class="bar">${fill('steps', steps, stepGoal)}</div>
         <button type="button" class="btn compact" data-act="open-steps">${d.steps == null ? 'Add steps' : 'Update'}</button>
       </section>
       <section class="card mini">
         <span class="card-title">Water</span>
         <span class="big">${litres(water)} L</span>
         <span class="small muted sub">of ${litres(c.targets.waterMl)} L today</span>
-        <div class="bar carbs"><i style="width:${pct(water, c.targets.waterMl)}%"></i></div>
+        <div class="bar carbs">${fill('water', water, c.targets.waterMl)}</div>
         <div class="pair tight">
           <button type="button" class="btn compact narrow" data-act="water" data-ml="${-WATER_STEP_ML}" aria-label="Take ${WATER_STEP_ML} ml off" ${water ? '' : 'disabled'}>&minus;</button>
           <button type="button" class="btn compact" data-act="water" data-ml="${WATER_STEP_ML}">+${WATER_STEP_ML} ml</button>
@@ -276,6 +276,7 @@ function setSession(key, type, reason) {
 
 actions['toggle-calendar'] = () => {
   ui.calendarOpen = !ui.calendarOpen;
+  ui.fresh = 'calendar';
   app.redraw();
   const target = ui.calendarOpen ? document.getElementById(`month-${ctx().key.slice(0, 7)}`) : view;
   target?.scrollIntoView({ block: 'start' });
@@ -314,7 +315,7 @@ actions['open-day'] = (el) => {
 };
 
 actions['set-day'] = (el) => {
-  sheet.close();
+  closeSheet();
   setSession(el.dataset.day, el.dataset.type, el.dataset.reason);
 };
 

@@ -10,6 +10,10 @@ export const ui = {
   tab: null,
   enter: '',
   calendarOpen: false,
+  // Motion for the next redraw only. nextEnter: the side the page comes in from when a screen
+  // changes inside one tab ('from-below', 'from-left'...). fresh: the one part that just opened.
+  nextEnter: null,
+  fresh: null,
   // adding: the Add screen is open. list: which tab of it. pick: the food in the amount sheet.
   // recipe: the recipe being built. picking: choosing an ingredient for it.
   food: { meal: null, adding: false, list: 'recent', search: '', pick: null, recipe: null, picking: false, found: null, day: null, added: null },

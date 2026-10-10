@@ -29,11 +29,42 @@ export const forms = {};
 // Set by app.js. Screens call it after changing something that is not stored (an open panel, a picked food).
 export const app = { redraw: () => {} };
 
+// The sheet slides up when it opens and back down when it closes. CLOSE_MS matches sheet-down in the CSS.
+const CLOSE_MS = 240;
+let closing = null; // finishes the close that is playing now
+
 export function openSheet(html) {
+  // A close still playing (a form that saves, then opens the next sheet): finish it now, so the
+  // new sheet comes up fresh and is not shut by the old one's ending.
+  closing?.();
   sheet.innerHTML = html;
   if (!sheet.open) sheet.showModal();
 }
-actions['close-sheet'] = () => sheet.close();
+export function closeSheet() {
+  if (!sheet.open || closing) return;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return sheet.close();
+  const timer = setTimeout(() => closing?.(), CLOSE_MS);
+  closing = () => {
+    clearTimeout(timer);
+    closing = null;
+    sheet.classList.remove('closing');
+    sheet.close();
+  };
+  sheet.classList.add('closing');
+}
+actions['close-sheet'] = closeSheet;
+// The Escape key, on a computer, closes it the same way.
+sheet.addEventListener('cancel', (e) => { e.preventDefault(); closeSheet(); });
+
+// The fill of a progress bar. Screens are redrawn whole, so each bar's last position is kept
+// here: the new fill starts from where the old one stood and glides to its new place.
+const barAt = new Map();
+export function fill(id, part, whole) {
+  const now = pct(part, whole);
+  const was = barAt.get(id) ?? now;
+  barAt.set(id, now);
+  return `<i style="--from:${was}%;--to:${now}%"></i>`;
+}
 
 // A labelled number field. Decimal keypad on phones, 16 px text so Safari does not zoom.
 export const field = (name, label, value, { unit = '', decimal = true, required = true, hint = '' } = {}) => `

@@ -204,19 +204,50 @@ export function progression(ex, last, dumbbells) {
   const sets = (last?.sets ?? []).filter((s) => s.reps > 0);
   if (!sets.length) return { type: 'start' };
   if (ex.kind === 'body') return { type: 'body' };
-  const kg = Math.min(...sets.map((s) => s.kg ?? 0));
+  const kg = workingKg(sets);
   if (!(kg > 0)) return { type: 'start' };
 
+  // When the sets were not all at one weight, the lift is judged at the weight most of them
+  // were done with. A set at a heavier weight was harder than asked, so it counts as reached.
+  // A lighter set does not: the weight stays until every set is done at it.
   const top = last.top ?? ex.reps[1];
+  const reached = (reps) => sets.every((s) => (s.kg ?? 0) > kg || ((s.kg ?? 0) === kg && s.reps >= reps));
   const effortOk = sets.every((s) => s.rir == null || s.rir >= (last.rirLo ?? 0));
-  const earned = sets.length >= (last.planned ?? 1) && sets.every((s) => s.reps >= top) && effortOk;
+  const earned = sets.length >= (last.planned ?? 1) && reached(top) && effortOk;
   if (!earned) return { type: 'hold', kg };
 
   const to = nextWeight(ex.kind, kg, dumbbells);
   if (to === null) return { type: 'cap', kg };
   const need = top + EXTRA_REPS;
-  if ((to - kg) / kg > BIG_JUMP && !sets.every((s) => s.reps >= need)) return { type: 'extra', kg, to, need };
+  if ((to - kg) / kg > BIG_JUMP && !reached(need)) return { type: 'extra', kg, to, need };
   return { type: 'jump', kg, to };
+}
+
+// The sets of one lift on one day, as they were logged. A recap holds every set with its own
+// weight and reps. Older recaps held one weight and the fewest reps, and are read as that many
+// equal sets. A set with no reps was not done.
+export function setsOf(lift) {
+  if (!lift) return [];
+  const sets = Array.isArray(lift.sets) ? lift.sets
+    : Array.from({ length: lift.planned ?? 1 }, () => ({ kg: lift.kg, reps: lift.reps }));
+  return sets.filter((s) => s && s.reps > 0);
+}
+
+// The weight most of the sets were done with. When two weights tie, the lighter one.
+export function workingKg(sets) {
+  const count = new Map();
+  for (const s of sets) count.set(s.kg ?? 0, (count.get(s.kg ?? 0) ?? 0) + 1);
+  return [...count].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0] ?? 0;
+}
+
+// Sets in words: "35 kg x 12, 12, 11", or "40 kg x 8, 35 kg x 12, 35 kg x 12" when the weight
+// changed, or "12, 10 reps" for a lift with no weight.
+export function setsText(sets) {
+  if (!sets.length) return '';
+  if (!sets.some((s) => s.kg > 0)) return `${sets.map((s) => s.reps).join(', ')} reps`;
+  return sets.every((s) => s.kg === sets[0].kg)
+    ? `${sets[0].kg} kg x ${sets.map((s) => s.reps).join(', ')}`
+    : sets.map((s) => `${s.kg ?? 0} kg x ${s.reps}`).join(', ');
 }
 
 // A rough strength score for one session of a lift: the best set, as an estimated one-rep max.
