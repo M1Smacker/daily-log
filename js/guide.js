@@ -24,10 +24,19 @@ export const topics = [
           <p>Next session, go up by the smallest jump you can and work back up from the bottom of the range. Then repeat.</p>
           <ul>
             <li>Barbells and the Smith machine: 2.5 kg. Machines: one pin. Dumbbells: the next pair up.</li>
+            <li>Barbell weights include the bar. Dumbbell weights are for one dumbbell.</li>
             <li>If the next jump is a big step (common on small lifts like lateral raises), go a few reps past the top of the range first.</li>
             <li>At the heaviest dumbbell, switch to the listed alternative so the lift can keep getting heavier.</li>
             <li>If a lift goes backwards two sessions in a row outside a deload, check sleep and food first. If those are fine, take an early deload week.</li>
           </ul>`,
+      },
+      {
+        title: 'Using the app at the gym',
+        body: `
+          <p>Open the Workout tab once when you arrive. The session sheet shows every lift with today's weight, sets, reps and rest. Read it, or screenshot it, and put the phone away.</p>
+          <p>When you are done, tap Full session or Minimum. That one tap marks the day.</p>
+          <p>Later, fill in the short recap: for each lift, the weight and the fewest reps you got on any set. If the fewest reps reached the top of the range, the next sheet shows a heavier weight.</p>
+          <p>Skip the recap and the day still counts. The app just cannot move your weights up without it.</p>`,
       },
       {
         title: 'Order and rest',

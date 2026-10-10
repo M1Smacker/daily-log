@@ -26,16 +26,21 @@ export function stepTarget(key, start, steps) {
 }
 
 // log: { 'YYYY-MM-DD': { type: 'done' | 'min' | 'missed', reason?, id? } }. id is the session logged that day.
-// Builds every day from plan.start to plan.end. What is next is decided by the cycle,
+// Builds every day from plan.start to plan.end, or four weeks past today if that is later:
+// the plan's end date is a target, and training carries on until the goal is reached.
+// What is next is decided by the cycle,
 // never by the weekday: a missed session stays next in line and lands on the next
 // planned gym day, so every later day moves one session along.
 // A planned day that has passed with nothing logged counts as missed on its own.
 // States: done, min, missed, planned, rest.
+const RUN_ON_DAYS = 28;
 export function schedule(plan, log, todayKey) {
   const days = [];
   const n = plan.cycle.length;
   let idx = 0;
-  for (let k = plan.start; k <= plan.end; k = addDays(k, 1)) {
+  const ahead = addDays(todayKey, RUN_ON_DAYS);
+  const end = ahead > plan.end ? ahead : plan.end;
+  for (let k = plan.start; k <= end; k = addDays(k, 1)) {
     const entry = log[k];
     const planned = Boolean(plan.weekdays[weekday(k)]);
     const day = { key: k, dow: weekday(k), dayNum: Number(k.slice(8)), isToday: k === todayKey, session: null, state: 'rest' };
@@ -272,6 +277,53 @@ export function targetWarnings(t) {
   if (t.kcal < KCAL_FLOOR) out.push(`${t.kcal} kcal is under ${KCAL_FLOOR}. The plan says not to go below that, because it starts to cost muscle, energy and focus.`);
   if (t.fat < FAT_FLOOR) out.push(`${t.fat} g of fat is under ${FAT_FLOOR} g. The plan keeps fat at ${FAT_FLOOR} g or more.`);
   return out;
+}
+
+// Numbers that cannot be right, by field. Catches typos like 8.5 kg or 20000 kcal.
+// Returns the first problem as a sentence, or null.
+const SANE = {
+  heightCm: [120, 230, 'Height should be in centimetres, for example 170.'],
+  startKg: [30, 250, 'Starting weight should be in kilograms, for example 85.'],
+  goalKg: [30, 250, 'Goal weight should be in kilograms, for example 75.'],
+  kcal: [800, 6000, 'Calories look wrong. A daily target is usually between 1,500 and 3,500.'],
+  protein: [20, 400, 'Protein looks wrong. It is in grams per day.'],
+  carbs: [20, 900, 'Carbs look wrong. They are in grams per day.'],
+  fat: [10, 300, 'Fat looks wrong. It is in grams per day.'],
+  fibre: [5, 100, 'Fibre looks wrong. It is in grams per day.'],
+  waterMl: [500, 10000, 'Water should be in litres, for example 3.'],
+};
+export function profileProblem(profile) {
+  const flat = { ...profile, ...profile.targets };
+  for (const [name, [min, max, message]] of Object.entries(SANE)) {
+    const v = flat[name];
+    if (!(typeof v === 'number' && v >= min && v <= max)) return message;
+  }
+  return null;
+}
+
+// Warnings about the pace the start weight, goal and end date add up to.
+const SAFE_KG_A_WEEK = 1;
+export function paceWarnings(startKg, goalKg, plan) {
+  if (goalKg >= startKg) return ['Your goal is not below your starting weight, so the plan line will not go down.'];
+  // The loss happens outside the maintenance phases.
+  let lossDays = 0;
+  for (let k = addDays(plan.start, 1); k <= plan.end; k = addDays(k, 1)) {
+    if (!plan.phases.some((p) => p.maintenance && k >= p.start && k <= (p.end ?? k))) lossDays++;
+  }
+  const perWeek = round1(((startKg - goalKg) / lossDays) * 7);
+  return perWeek > SAFE_KG_A_WEEK
+    ? [`Reaching ${goalKg} kg by the end date means losing ${perWeek} kg a week. More than ${SAFE_KG_A_WEEK} kg a week costs muscle. A later date or a higher goal is safer.`]
+    : [];
+}
+
+// A weigh-in far from the recent ones is more likely a typo than a real change.
+const ODD_WEIGHT_KG = 3;
+export function oddWeight(days, key, kg) {
+  for (let i = 1; i <= 14; i++) {
+    const before = days[addDays(key, -i)]?.weightKg;
+    if (before) return Math.abs(kg - before) > ODD_WEIGHT_KG ? round1(Math.abs(kg - before)) : null;
+  }
+  return null;
 }
 
 export const left = (target, eaten) => target - eaten;

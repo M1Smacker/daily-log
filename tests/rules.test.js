@@ -253,6 +253,30 @@ test('targetWarnings: warns under the calorie and fat floors, never blocks', () 
   assert.equal(r.targetWarnings({ kcal: 1800, fat: 50 }).length, 0);
 });
 
+test('profileProblem: catches numbers that cannot be right', () => {
+  const ok = { heightCm: 175, startKg: 85, goalKg: 78, targets: { kcal: 2000, protein: 150, carbs: 200, fat: 70, fibre: 30, waterMl: 2500 } };
+  assert.equal(r.profileProblem(ok), null);
+  assert.match(r.profileProblem({ ...ok, heightCm: 1.75 }), /Height/);
+  assert.match(r.profileProblem({ ...ok, startKg: 8.5 }), /Starting weight/);
+  assert.match(r.profileProblem({ ...ok, targets: { ...ok.targets, kcal: 20000 } }), /Calories/);
+  assert.match(r.profileProblem({ ...ok, targets: { ...ok.targets, waterMl: 3 } }), /Water/);
+  assert.match(r.profileProblem({ ...ok, targets: { ...ok.targets, protein: null } }), /Protein/);
+});
+
+test('paceWarnings: warns when the dates ask for more than 1 kg a week', () => {
+  assert.deepEqual(r.paceWarnings(90, 76, plan), []); // about 0.65 kg a week
+  assert.equal(r.paceWarnings(90, 60, plan).length, 1); // about 1.4 kg a week
+  assert.match(r.paceWarnings(80, 80, plan)[0], /not below/);
+});
+
+test('oddWeight: flags a weigh-in far from the last one', () => {
+  const days = { '2026-10-10': { weightKg: 89 }, '2026-10-12': {} };
+  assert.equal(r.oddWeight(days, '2026-10-13', 88.4), null);
+  assert.equal(r.oddWeight(days, '2026-10-13', 98), 9); // typed 98 for 89
+  assert.equal(r.oddWeight(days, '2026-11-20', 80), null); // nothing recent to compare with
+  assert.equal(r.oddWeight({}, '2026-10-13', 89), null);
+});
+
 test('biggestGap: the macro furthest behind, or null', () => {
   const targets = { protein: 150, carbs: 200, fat: 70 };
   assert.equal(r.biggestGap(targets, { protein: 60, carbs: 130, fat: 45 }), 'protein');

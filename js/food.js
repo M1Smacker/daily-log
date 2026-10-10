@@ -8,6 +8,8 @@ import { sheet, esc, num, actions, forms, app, openSheet, field, readNumber } fr
 const MEALS = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snack', dinner: 'Dinner' };
 const GRAM_STEP = 10;
 const SERVING_STEP = 0.5;
+const MAX_AMOUNT = 5000; // grams or servings: anything above is a typo
+const MAX_KCAL = 10000;
 
 const amountText = (e) =>
   e.unit === 'g' ? `${num(e.amount)} g` : e.amount === 1 ? esc(e.serving) : `${e.amount} x ${esc(e.serving)}`;
@@ -122,6 +124,7 @@ export function foodBody() {
 actions['pick-food'] = (el) => {
   const c = ctx();
   const f = c.foods.find((x) => x.id === el.dataset.id);
+  if (!f) return;
   ui.food = { ...ui.food, id: f.id, amount: f.amount ?? (f.byGrams ? f.grams : 1), meal: ui.food.meal ?? defaultMeal(c) };
   app.redraw();
   document.getElementById('add-panel')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -131,8 +134,10 @@ actions['pick-meal'] = (el) => { ui.food.meal = el.dataset.meal; app.redraw(); }
 
 actions['step-amount'] = (el) => {
   const f = ctx().foods.find((x) => x.id === ui.food.id);
+  if (!f) return;
   const step = f.byGrams ? GRAM_STEP : SERVING_STEP;
-  ui.food.amount = Math.max(step, Math.round((Number(ui.food.amount) + Number(el.dataset.dir) * step) * 10) / 10);
+  const now = Number(ui.food.amount) || 0;
+  ui.food.amount = Math.min(MAX_AMOUNT, Math.max(step, Math.round((now + Number(el.dataset.dir) * step) * 10) / 10));
   app.redraw();
 };
 
@@ -140,7 +145,7 @@ actions['step-amount'] = (el) => {
 document.addEventListener('input', (e) => {
   if (e.target.matches('[data-amount]')) {
     const n = Number(e.target.value.replace(',', '.'));
-    if (!Number.isFinite(n) || n <= 0) return;
+    if (!Number.isFinite(n) || n <= 0 || n > MAX_AMOUNT) return;
     ui.food.amount = n;
     const p = rules.portion(ctx().foods.find((x) => x.id === ui.food.id), n);
     for (const el of document.querySelectorAll('[data-live]')) el.textContent = num(p[el.dataset.live]);
@@ -167,7 +172,7 @@ actions['add-food'] = () => {
   const c = ctx();
   const f = c.foods.find((x) => x.id === ui.food.id);
   const amount = Number(ui.food.amount);
-  if (!f || !(amount > 0)) return;
+  if (!f || !(amount > 0) || amount > MAX_AMOUNT) return;
   const entry = {
     id: newId(), foodId: f.id, name: f.name, serving: f.serving, meal: ui.food.meal ?? defaultMeal(c),
     amount, unit: f.byGrams ? 'g' : 'serving', ...rules.portion(f, amount),
@@ -199,7 +204,7 @@ actions['open-entry'] = (el) => {
 forms.entry = (fd, form) => {
   const c = ctx();
   const amount = readNumber(fd, 'amount');
-  if (!amount) return 'Type an amount above zero.';
+  if (!amount || amount > MAX_AMOUNT) return 'Type an amount above zero. That one looks too big to be right.';
   const food = (c.day.food ?? []).map((e) => {
     if (e.id !== form.dataset.id) return e;
     // Recalculate from the saved food when it still exists, otherwise scale what was logged.
@@ -254,6 +259,13 @@ forms.food = (fd, form) => {
   const n = Object.fromEntries(['kcal', 'protein', 'carbs', 'fat', 'fibre', 'grams'].map((k) => [k, readNumber(fd, k)]));
   if (!name || !serving) return 'Give the food a name and say what one serving is.';
   if ([n.kcal, n.protein, n.carbs, n.fat].includes(null)) return 'Calories, protein, carbs and fat all need a number. Use 0 if there is none.';
+  if (n.kcal > MAX_KCAL || Math.max(n.protein, n.carbs, n.fat, n.fibre ?? 0) > 1000) return 'One of those numbers is too big to be one serving. Check for a slip.';
+  // Calories that are far from what the macros add up to usually mean a typo in one of them.
+  const fromMacros = n.protein * 4 + n.carbs * 4 + n.fat * 9;
+  if (n.kcal > 50 && (fromMacros > n.kcal * 1.6 || fromMacros < n.kcal * 0.5) && form.dataset.warned !== String(fromMacros)) {
+    form.dataset.warned = String(fromMacros);
+    return `Those macros add up to about ${Math.round(fromMacros)} kcal, but you typed ${n.kcal}. If that is right, tap Save food again.`;
+  }
   const id = form.dataset.id || `my-${newId()}`;
   const food = { id, name, serving, kcal: n.kcal, protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre ?? 0 };
   if (n.grams) Object.assign(food, { byGrams: true, grams: n.grams, amount: n.grams });

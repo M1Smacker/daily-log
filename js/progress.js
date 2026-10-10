@@ -88,7 +88,7 @@ function waistCard(c) {
   return `
     <section class="card mini">
       <span class="card-title">Waist</span>
-      <span class="big ${latest ? '' : 'muted'}">${latest ? `${c.data.days[latest].waistCm} cm` : 'Not yet'}</span>
+      <span class="big ${latest ? '' : 'muted'}">${latest ? `${Number(c.data.days[latest].waistCm)} cm` : 'Not yet'}</span>
       <span class="small muted sub">${latest
         ? `${shortDate(latest)}${change !== null ? `, ${change > 0 ? '+' : ''}${change} cm since the first` : ''}`
         : 'Once a week, at the belly button, after breathing out.'}</span>
@@ -212,6 +212,7 @@ function weekCard(c) {
         ${cell(last7.filter((d) => d.session?.type === 'done' || d.session?.type === 'min').length, 'sessions')}
       </div>
       <div class="small muted">Averages over the days you logged: food on ${fed.length} of 7, steps on ${walked.length} of 7.</div>
+      ${fed.length >= 4 && kcal < rules.KCAL_FLOOR ? `<div class="note warn"><b>Eating very little</b>Your logged average is under ${num(rules.KCAL_FLOOR)} kcal a day. If the log is complete, that is too low and costs muscle and focus. Eat at your target.</div>` : ''}
     </section>`;
 }
 

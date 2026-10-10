@@ -91,13 +91,17 @@ function render(nav = true) {
   if (!c.profile) {
     tabs.hidden = true;
     ui.enter = '';
-    frame(c, 'Welcome', setupBody(), { sub: 'First, your numbers', bare: true });
+    // If saved data could not be used, say so here: otherwise it looks like a fresh start.
+    const problem = acc.error ? `<div class="note warn"><b>Heads up</b>${esc(acc.error)}</div>` : '';
+    frame(c, 'Welcome', problem + setupBody(), { sub: 'First, your numbers', bare: true });
     return;
   }
   tabs.hidden = false;
 
   const hash = location.hash.slice(1);
   const tab = ['workout', 'food', 'progress', 'settings', 'guide'].includes(hash) ? hash : 'today';
+  // Leaving the Workout tab drops any past session that was open, so it always comes back on today.
+  if (nav && tab !== 'workout' && ui.tab === 'workout') ui.workoutDay = null;
   ui.enter = nav && ui.tab && ui.tab !== tab ? enterFrom(ui.tab, tab) : '';
   ui.tab = tab;
 
@@ -177,7 +181,24 @@ document.addEventListener('submit', (e) => {
 // Tapping the dimmed area around the sheet closes it.
 sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.close(); });
 
+// The app stays open in the background for days on a phone. When it comes back to the front,
+// or the clock passes the rollover, redraw so "today" is really today. Without this a morning
+// weigh-in would land on yesterday.
+let shownDay = null;
+function refreshIfDayChanged() {
+  const key = ctx().key;
+  if (shownDay && key !== shownDay) {
+    ui.workoutDay = null;
+    ui.calendarOpen = false;
+    render(false);
+  }
+  shownDay = key;
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshIfDayChanged(); });
+setInterval(refreshIfDayChanged, 30000);
+
 store.init(() => render(false));
 addEventListener('hashchange', () => render());
 render();
+shownDay = ctx().key;
 startPwa();

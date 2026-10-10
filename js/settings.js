@@ -60,7 +60,7 @@ export function settingsBody() {
       ${store.account.cloud ? `
         <div class="muted" style="font-size:14px">Signed in. Your data is in your own private database and on this phone for offline use.</div>
         <label class="field"><span>Your user id</span>
-          <input type="text" readonly value="${esc(store.account.user?.uid ?? '')}" aria-label="Your user id" onfocus="this.select()">
+          <input type="text" readonly value="${esc(store.account.user?.uid ?? '')}" aria-label="Your user id">
           <small>The security rules are pinned to this id, so no other account can read or write.</small>
         </label>
         <button type="button" class="btn" data-act="sign-out">Sign out</button>`
@@ -80,9 +80,11 @@ forms.profile = (fd, form) => {
   };
   const missing = [profile.heightCm, profile.startKg, profile.goalKg, ...Object.values(profile.targets)].some((v) => !v);
   if (missing) return 'Every box needs a number above zero.';
+  const problem = rules.profileProblem(profile);
+  if (problem) return problem;
 
-  // Warn once about risky targets, then let a second tap save them anyway.
-  const warnings = rules.targetWarnings(profile.targets);
+  // Warn once about risky targets or an unsafe pace, then let a second tap save them anyway.
+  const warnings = [...rules.targetWarnings(profile.targets), ...rules.paceWarnings(profile.startKg, profile.goalKg, ctx().plan)];
   const seen = warnings.join('|');
   if (warnings.length && form.dataset.warned !== seen) {
     form.dataset.warned = seen;

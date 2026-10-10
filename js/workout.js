@@ -33,8 +33,10 @@ function view() {
   const sessionId = saved?.session ?? days.find((d) => d.key === key)?.session ?? rules.nextUp(days, c.key)?.session;
   if (!sessions[sessionId]) return null;
   const phase = rules.phaseFor(key, c.plan.phases);
+  const mark = c.log[key]?.type;
+  const marked = mark === 'done' || mark === 'min';
   const w = saved ?? {
-    session: sessionId, minimum: Boolean(ui.wantMinimum), finished: false,
+    session: sessionId, minimum: marked ? mark === 'min' : Boolean(ui.wantMinimum), finished: marked,
     rirLo: rules.targetRir(phase, key)[0], half: phase?.load === 'half', lifts: {},
   };
   const all = sessions[sessionId];
@@ -45,13 +47,17 @@ function view() {
     if (phase?.load === 'half' && ['jump', 'extra', 'cap'].includes(p.type)) p = { type: 'hold', kg: p.kg, deload: true };
     return {
       ...ex, n: i + 1, last, p,
-      planned: rules.setsFor(ex, phase, key, w.minimum),
+      planned: rules.setsFor(ex, phase, key, w.minimum) + (extraSet(c, phase, sessionId, ex.id, w.minimum) ? 1 : 0),
       target: p.type === 'jump' ? p.to : p.kg ?? null,
       entry: w.lifts?.[ex.id],
     };
   });
   return { c, key, isToday: key === c.key, phase, w, lifts, session: c.plan.sessions[sessionId] };
 }
+
+// In the Push phase, the two muscles picked as lagging get one more set on their lift.
+const extraSet = (c, phase, sessionId, liftId, minimum) => Boolean(phase?.extraSet) && !minimum &&
+  (c.plan.pushExtra ?? []).some((m) => c.plan.extraSetChoices[m]?.session === sessionId && c.plan.extraSetChoices[m]?.lift === liftId);
 
 // The last time this lift was done before `key`. Skips days the alternative was used, and
 // deload days, which are lighter on purpose and say nothing about what you can lift.
@@ -94,13 +100,15 @@ function reason(v, ex) {
   return html;
 }
 
+// Dumbbell weights are for one dumbbell, barbell weights include the bar.
+const unit = (ex) => (ex.kind === 'dumbbell' ? 'kg each' : 'kg');
 const targetText = (ex) =>
   ex.kind === 'body' ? ['BW', 'bodyweight']
     : ex.target ? [ex.target, {
-      jump: `kg, up from ${ex.p.kg}`,
-      extra: `kg, aim for ${ex.p.need} reps`,
-      cap: 'kg, see the alternative',
-    }[ex.p.type] ?? 'kg']
+      jump: `${unit(ex)}, up from ${ex.p.kg}`,
+      extra: `${unit(ex)}, aim for ${ex.p.need} reps`,
+      cap: `${unit(ex)}, see the alternative`,
+    }[ex.p.type] ?? unit(ex)]
     : ['?', 'find a weight'];
 
 // One lift on the sheet. Tapping it shows the details, but nothing needs tapping.
@@ -138,7 +146,7 @@ function recapRow(ex) {
     <div class="recap-row">
       <div class="lift-text"><b>${esc(ex.name)}</b><small>${ex.planned} x ${range(ex.reps)}${ex.target ? `, sheet said ${ex.target} kg` : ''}</small></div>
       <div class="recap-fields">
-        ${body ? '<span class="recap-field"><span>Kg</span><i class="set-bw">BW</i></span>' : input('kg', e.kg ?? ex.target, 'decimal', 'Kg')}
+        ${body ? '<span class="recap-field"><span>Kg</span><i class="set-bw">BW</i></span>' : input('kg', e.kg ?? ex.target, 'decimal', ex.kind === 'dumbbell' ? 'Kg each' : 'Kg')}
         ${input('reps', e.reps, 'numeric', 'Fewest reps')}
         ${ex.alt ? `<label class="tick alt-tick"><input type="checkbox" data-alt="${ex.id}" ${e.alt ? 'checked' : ''}>Alt</label>` : '<span></span>'}
       </div>
@@ -160,7 +168,7 @@ function cardioCard(v) {
         ${field('minutes', 'Minutes', '', { decimal: false })}
       </div>
       <button class="btn compact">Add cardio</button>
-      <div class="small muted">Steps come first. On a lifting day, cardio goes after the weights.</div>
+      <div class="small muted">Steps come first. On a lifting day, cardio goes after the weights.${v.phase?.load === 'ramp' ? ' Bike intervals wait until the Build phase, once lifting feels routine.' : ''}</div>
     </form>`;
 }
 
@@ -186,6 +194,13 @@ export function workoutView() {
       <button type="button" role="switch" aria-checked="${v.w.minimum}" aria-label="Minimum session" class="switch" data-act="toggle-minimum"><i></i></button>
     </div>
     ${rest}
+    ${v.phase?.extraSet && !v.w.minimum ? `
+      <div class="card raised">
+        <div class="card-title">One extra set this phase</div>
+        <div class="muted" style="font-size:14px">Pick the two muscles that are lagging. Each gets one more set a week. The sheet below already counts it.</div>
+        <div class="chips">${Object.keys(v.c.plan.extraSetChoices).map((m) =>
+          `<button type="button" class="chip${(v.c.plan.pushExtra ?? []).includes(m) ? ' on' : ''}" data-act="pick-extra" data-muscle="${m}" aria-pressed="${(v.c.plan.pushExtra ?? []).includes(m)}">${m}</button>`).join('')}</div>
+      </div>` : ''}
     <section class="card sheet-card">
       <span class="card-title">The session</span>
       <span class="card-tag">${v.lifts.length} lifts</span>
@@ -261,6 +276,12 @@ document.addEventListener('change', (e) => {
   put(v, w, true);
 });
 
+// Two muscles at most. Picking a third drops the oldest pick.
+actions['pick-extra'] = (el) => {
+  const now = ctx().plan.pushExtra ?? [];
+  const m = el.dataset.muscle;
+  store.setPlan({ pushExtra: now.includes(m) ? now.filter((x) => x !== m) : [...now, m].slice(-2) });
+};
 actions['open-lift'] = (el) => { ui.openLift = ui.openLift === el.dataset.ex ? null : el.dataset.ex; app.redraw(); };
 actions['toggle-minimum'] = () => {
   const { v, w } = current();

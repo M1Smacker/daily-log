@@ -12,6 +12,8 @@ const GAP_SESSIONS = 4; // missed in a row before offering to push the phases ba
 const GAP_SHIFT_DAYS = 7;
 const REASONS = ['Sick', 'Exams', 'Travel', 'Other'];
 const WATER_STEP_ML = 250;
+const MAX_WATER_ML = 15000;
+const MAX_STEPS = 100000;
 const STATE_WORD = { done: 'done', min: 'minimum done', missed: 'missed', planned: 'planned', rest: 'rest day' };
 
 // One day, in the strip or the calendar. Days up to today can be tapped to mark them.
@@ -31,7 +33,7 @@ function dayCell(c, d, inStrip) {
 
 function calendar(c, days) {
   const byKey = new Map(days.map((d) => [d.key, d]));
-  const lastMonth = c.plan.end.slice(0, 7);
+  const lastMonth = days.at(-1).key.slice(0, 7);
   let html = '';
   for (let m = c.plan.start.slice(0, 7); m <= lastMonth; ) {
     const [y, mo] = m.split('-').map(Number);
@@ -199,7 +201,7 @@ function smallCards(c) {
       </section>
       <section class="card mini">
         <span class="card-title">Weight</span>
-        <span class="big ${d.weightKg ? '' : 'muted'}">${d.weightKg ? `${d.weightKg} kg` : 'Not yet'}</span>
+        <span class="big ${d.weightKg ? '' : 'muted'}">${d.weightKg ? `${Number(d.weightKg)} kg` : 'Not yet'}</span>
         <span class="small muted sub">Morning, before food or water.</span>
         <button type="button" class="btn compact" data-act="open-weight">${d.weightKg ? 'Change' : 'Add weight'}</button>
       </section>
@@ -213,19 +215,36 @@ function smallCards(c) {
     </div>`;
 }
 
+// The stall check lives on Progress. When it has something to say, Today points to it,
+// so a too-fast loss or a stall is not missed by someone who rarely opens that tab.
+function stallNudge(c) {
+  const s = rules.stallCheck(c.data.days, c.key, c.plan.start).status;
+  const text = { fast: 'You are losing faster than the plan wants.', stall: 'Your weight has been flat for two weeks.' }[s];
+  return text ? `<a class="note warn nudge" href="#progress"><b>Stall check</b>${text} See Progress for what to do.</a>` : '';
+}
+
 export function todayBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   const run = rules.missedRun(days, c.key);
-  return weekCard(c, days) + gapOffer(c, run) + nextSession(c, days, run) +
+  return weekCard(c, days) + gapOffer(c, run) + stallNudge(c) + nextSession(c, days, run) +
     calories(c, rules.totals(c.day.food ?? [])) + smallCards(c) +
     '<div class="status" data-sync></div>';
 }
 
 // ----- Handlers -----
 
-const setSession = (key, type, reason) =>
-  store.setDay(key, { session: type === 'clear' ? null : reason ? { type, reason } : { type } });
+// Marking a day also keeps any workout logged on it in step, so the Workout screen never
+// shows a finished session for a day that is no longer marked done, or the other way round.
+function setSession(key, type, reason) {
+  const patch = { session: type === 'clear' ? null : reason ? { type, reason } : { type } };
+  const workout = ctx().data.days[key]?.workout;
+  if (workout) {
+    const done = type === 'done' || type === 'min';
+    patch.workout = { ...workout, finished: done, minimum: done ? type === 'min' : workout.minimum };
+  }
+  store.setDay(key, patch);
+}
 
 actions['toggle-calendar'] = () => {
   ui.calendarOpen = !ui.calendarOpen;
@@ -286,7 +305,7 @@ for (const act of ['gap-push', 'gap-keep']) {
 
 actions.water = (el) => {
   const c = ctx();
-  store.setDay(c.key, { waterMl: Math.max(0, (c.day.waterMl ?? 0) + Number(el.dataset.ml)) });
+  store.setDay(c.key, { waterMl: Math.min(MAX_WATER_ML, Math.max(0, (c.day.waterMl ?? 0) + Number(el.dataset.ml))) });
 };
 
 // A one-number sheet, used for steps and weight.
@@ -308,13 +327,22 @@ actions['open-weight'] = () => numberSheet('weight', 'Weight this morning',
 
 forms.steps = (fd) => {
   const n = readNumber(fd, 'value');
-  if (n === null) return 'Type a number of steps.';
+  if (n === null || n > MAX_STEPS) return 'Type the number of steps your phone shows, for example 6400.';
   store.setDay(ctx().key, { steps: Math.round(n) });
 };
-forms.weight = (fd) => {
+forms.weight = (fd, form) => {
   const n = readNumber(fd, 'value');
   if (n === null || n < 30 || n > 250) return 'Type your weight in kilograms, for example 82.4.';
-  store.setDay(ctx().key, { weightKg: Math.round(n * 10) / 10 });
+  const c = ctx();
+  const kg = Math.round(n * 10) / 10;
+  // A number far from the last weigh-in is usually a slip of the finger. Ask once, then accept it.
+  const off = rules.oddWeight(c.data.days, c.key, kg);
+  if (off !== null && form.dataset.warned !== String(kg)) {
+    form.dataset.warned = String(kg);
+    form.querySelector('button.primary').textContent = 'Save anyway';
+    return `${kg} kg is ${off} kg away from your last weigh-in. If that is right, tap Save anyway.`;
+  }
+  store.setDay(c.key, { weightKg: kg });
 };
 
 // Supplement tick boxes save as soon as they change.

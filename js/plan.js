@@ -34,7 +34,7 @@ export const plan = {
       why: 'Lets fatigue drop so you come back stronger. It will feel too easy, and that is the point. Do not add work to make it feel like a real session.',
     },
     {
-      name: 'Push phase', start: '2026-12-17', end: '2027-01-27', load: 'full', rir: [0, 2],
+      name: 'Push phase', start: '2026-12-17', end: '2027-01-27', load: 'full', rir: [0, 2], extraSet: true,
       sets: 'The full sets, plus 1 extra set for two lagging muscles (usually side delts and calves, or chest).',
       effort: '0 to 2 reps in reserve.',
       food: 'Your deficit target, adjusted by the stall check.',
@@ -70,6 +70,14 @@ export const plan = {
 
   // The dumbbells at the gym, lightest first. A dumbbell lift jumps to the next one up.
   dumbbells: [5, 7, 7.5, 8, 10, 12.5, 15, 17.5, 20],
+
+  // In a phase marked extraSet, two of these get one more set a week. Each names the one
+  // lift, in one session, that takes the set.
+  extraSetChoices: {
+    'Side delts': { session: 'upperB', lift: 'lateral-raise' },
+    Calves: { session: 'lowerA', lift: 'standing-calf-raise' },
+    Chest: { session: 'upperB', lift: 'chest-press' },
+  },
 
   // Progress photos: the first reminder, then every so many days.
   photos: { first: '2026-10-22', everyDays: 14 },

@@ -18,4 +18,8 @@
 - Gym Logger: the four sessions with all 32 lifts, sets that follow the phase, set logging with last time's numbers, the jump rule, minimum session switch, rest timer, form video and alternative buttons, cardio log, and editing past sessions from the calendar.
 - Insights: weight chart against the plan line (flat through the diet break), 7-day average, waist, sessions this week, stall check, last 7 days, a line per lift, phases, photo reminder.
 - Your data: "Copy my data for Claude", a JSON backup file and a CSV spreadsheet.
+- Gym flow reworked for a phone that stays in the bag: a session sheet with today's weights, a one-tap finish (Full session or Minimum), and a short recap (weight and fewest reps per lift).
+- Audit fixes: the schedule runs on past the plan's end date; a logged session anchors the cycle; deloads hold the weight; shared lifts are judged by their own rep range; marks and workouts stay in step; the app refreshes when the day changes; saved data is never dropped on a format change and unreadable data is backed up; loaded data is cleaned so one bad value cannot break a screen; two open tabs stay in step.
+- New checks and warnings: numbers that cannot be right at setup, a pace of more than 1 kg a week, a weigh-in far from the last one, a food whose calories do not match its macros, a logged average under the calorie floor, and a pointer on Today when the stall check has something to say.
+- Push phase: pick two lagging muscles for one extra set a week.
 - Firebase login and sync are written but switched off until a config is added. Security rules are in `firestore.rules`.

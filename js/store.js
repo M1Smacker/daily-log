@@ -35,14 +35,77 @@ export const account = { cloud: Boolean(firebaseConfig), ready: !firebaseConfig,
 // Called when only the sync status changed, so the screen does not need a full redraw.
 export const hooks = { status: () => {} };
 
+// Loaded data is not trusted to be well formed: a damaged save or a bad sync must not be
+// able to break a screen. Anything that is not the right kind of value is dropped from the
+// copy in memory. What is stored is left as it is.
+const NUMBERS = ['weightKg', 'waistCm', 'steps', 'waterMl'];
+const isNum = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+function tidyDay(day) {
+  if (!day || typeof day !== 'object') return {};
+  const d = { ...day };
+  for (const f of NUMBERS) if (f in d && !isNum(d[f])) delete d[f];
+  d.food = Array.isArray(d.food) ? d.food.filter((e) => e && typeof e === 'object' && isNum(e.kcal)) : undefined;
+  d.cardio = Array.isArray(d.cardio) ? d.cardio.filter((x) => x && isNum(x.minutes)) : undefined;
+  if (d.session && !['done', 'min', 'missed'].includes(d.session.type)) delete d.session;
+  if (d.workout && (typeof d.workout !== 'object' || typeof d.workout.session !== 'string')) delete d.workout;
+  if (d.workout && (typeof d.workout.lifts !== 'object' || !d.workout.lifts)) d.workout = { ...d.workout, lifts: {} };
+  if (d.food === undefined) delete d.food;
+  if (d.cardio === undefined) delete d.cardio;
+  return d;
+}
+const isKey = (k) => /^\d{4}-\d{2}-\d{2}$/.test(k);
+function tidy(all) {
+  const days = {};
+  for (const [k, d] of Object.entries(all.days && typeof all.days === 'object' ? all.days : {})) if (isKey(k)) days[k] = tidyDay(d);
+  const foods = {};
+  for (const [id, f] of Object.entries(all.foods && typeof all.foods === 'object' ? all.foods : {})) {
+    if (f && typeof f === 'object' && (f.hidden || (typeof f.name === 'string' && isNum(f.kcal)))) foods[id] = { ...f, id };
+  }
+  const t = all.profile?.targets;
+  const profile = t && typeof t === 'object' && ['kcal', 'protein', 'carbs', 'fat', 'fibre', 'waterMl'].every((m) => isNum(t[m]) && t[m] > 0)
+    && isNum(all.profile.startKg) && isNum(all.profile.goalKg) ? all.profile : null;
+  return { ...all, days, foods, profile, plan: all.plan && typeof all.plan === 'object' ? all.plan : {} };
+}
+
+// Steps that bring older saved data up to the current shape, keyed by the version they start from.
+// Empty for now: nothing has changed shape yet. Add { 1: (d) => ({ ...d, v: 2, ... }) } when it does.
+const UPGRADES = {};
+let readOnly = false; // set when saved data must not be overwritten
+
+// Reads what is saved on this device. Never throws away something it cannot use:
+// unreadable or newer data is kept under a backup key first.
+function loadDevice() {
+  let raw = null;
+  try { raw = localStorage.getItem(KEY); } catch { return; } // storage blocked: nothing to read
+  if (!raw) return;
+  let saved;
+  try { saved = JSON.parse(raw); } catch { saved = null; }
+  if (!saved || typeof saved !== 'object' || typeof saved.v !== 'number') {
+    try { localStorage.setItem(`${KEY}-unreadable`, raw); } catch { /* could not back up */ }
+    account.error = 'The data saved on this device could not be read. A copy was kept, and the app has started empty.';
+    return;
+  }
+  if (saved.v > VERSION) {
+    readOnly = true;
+    account.error = 'This data was saved by a newer version of the app. Refresh to update. Nothing will be saved until then.';
+    return;
+  }
+  while (saved.v < VERSION && UPGRADES[saved.v]) saved = UPGRADES[saved.v](saved);
+  device = tidy({ ...empty(), ...saved, v: VERSION });
+}
+
 export async function init(listener) {
   onChange = listener;
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY));
-    if (saved?.v === VERSION) device = { ...device, ...saved };
-  } catch { /* nothing saved yet, or storage is blocked: start empty */ }
+  loadDevice();
   if (!firebaseConfig) {
     data = device;
+    // Another tab of the app saved something: take it, so the two do not overwrite each other.
+    addEventListener('storage', (e) => {
+      if (e.key !== KEY) return;
+      loadDevice();
+      data = device;
+      onChange();
+    });
     return;
   }
   try {
@@ -98,10 +161,10 @@ function onUser(user) {
   const opts = { includeMetadataChanges: true };
   const map = (snap) => { const out = {}; snap.forEach((d) => { out[d.id] = d.data(); }); return out; };
   stop = [
-    f.onSnapshot(f.doc(db, ...at('meta', 'profile')), opts, (s) => apply('profile', s.exists() ? s.data() : null, s.metadata), fail),
+    f.onSnapshot(f.doc(db, ...at('meta', 'profile')), opts, (s) => apply('profile', s.exists() ? tidy({ profile: s.data() }).profile : null, s.metadata), fail),
     f.onSnapshot(f.doc(db, ...at('meta', 'plan')), opts, (s) => apply('plan', s.exists() ? s.data() : {}, s.metadata), fail),
-    f.onSnapshot(f.collection(db, ...at('days')), opts, (s) => apply('days', map(s), s.metadata), fail),
-    f.onSnapshot(f.collection(db, ...at('foods')), opts, (s) => apply('foods', map(s), s.metadata), fail),
+    f.onSnapshot(f.collection(db, ...at('days')), opts, (s) => apply('days', tidy({ days: map(s) }).days, s.metadata), fail),
+    f.onSnapshot(f.collection(db, ...at('foods')), opts, (s) => apply('foods', tidy({ foods: map(s) }).foods, s.metadata), fail),
   ];
 }
 
@@ -118,7 +181,14 @@ function uploadDeviceData() {
 // Saves one document. A null value deletes it. JSON round trip drops undefined, which Firestore rejects.
 function write(path, value) {
   if (!firebaseConfig) {
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch { /* private mode: kept in memory only */ }
+    if (readOnly) return;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(data));
+    } catch {
+      // Storage is full or blocked. Say so once: silently losing a day of logs is worse.
+      account.error = 'This could not be saved on the device. Storage may be full or blocked. Use the backup file on the Progress screen.';
+      hooks.status();
+    }
     return;
   }
   if (!account.user) return;
