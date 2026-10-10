@@ -9,6 +9,8 @@ import { logged, asSets } from './workout.js';
 import { esc, num, fmt, shortDate, litres, actions, forms, openSheet, field, readNumber } from './ui.js';
 
 const LIFT_NAMES = Object.fromEntries(Object.values(sessions).flat().map((e) => [e.id, e.name]));
+// A swapped lift's id is the original id, then '~', then the new name in lower case.
+const liftName = (id) => LIFT_NAMES[id] ?? (id.includes('~') ? id.split('~')[1].replace(/-/g, ' ').replace(/^./, (ch) => ch.toUpperCase()) : id);
 const dayKcal = (d) => rules.totals(d.food ?? []);
 
 // ----- Weight -----
@@ -166,7 +168,7 @@ function liftsCard(c) {
     const show = (t) => (t.kg ? `${t.kg} x ${t.reps}` : `${t.reps} reps`);
     return `
       <div class="lift-line">
-        <span><b>${esc(LIFT_NAMES[id] ?? id)}</b><small>${show(h[0].top)} to ${show(h.at(-1).top)}, ${h.length} sessions</small></span>
+        <span><b>${esc(liftName(id))}</b><small>${show(h[0].top)} to ${show(h.at(-1).top)}, ${h.length} sessions</small></span>
         <svg viewBox="0 0 80 24" width="80" height="24" aria-hidden="true"><polyline points="${pts}" class="avg-line"/></svg>
       </div>`;
   }).join('');

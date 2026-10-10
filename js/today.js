@@ -97,6 +97,33 @@ function gapOffer(c, run) {
     </section>`;
 }
 
+// The phase after the diet break starts with a new calorie target, worked out from the weight lost.
+// It is offered once. plan.finishAsked remembers the answer.
+function finishOffer(c) {
+  if (c.plan.finishAsked || !rules.afterBreak(c.key, c.plan.phases)) return '';
+  const now = rules.weightAverage(c.data.days, c.key);
+  if (now === null) return '<div class="note"><b>New phase, new target</b>Weigh in on three mornings this week and the app will work out your calories for this phase.</div>';
+  const to = rules.finishKcal(c.targets.kcal, c.profile.startKg, now);
+  if (c.targets.kcal - to < 30) return '';
+  return `
+    <section class="card raised">
+      <div class="card-title">A new calorie target</div>
+      <div class="muted" style="font-size:14px">You are ${(c.profile.startKg - now).toFixed(1)} kg lighter than at the start, so your body burns about ${num(c.targets.kcal - to)} kcal less a day. To keep the same gap, the target becomes ${num(to)} kcal. The cut comes off carbs. Protein and fat stay.</div>
+      <div class="pair">
+        <button type="button" class="btn primary" data-act="finish-use" data-kcal="${to}">Use ${num(to)}</button>
+        <button type="button" class="btn" data-act="finish-keep">Keep ${num(c.targets.kcal)}</button>
+      </div>
+    </section>`;
+}
+actions['finish-keep'] = () => store.setPlan({ finishAsked: true });
+actions['finish-use'] = (el) => {
+  const c = ctx();
+  const kcal = Number(el.dataset.kcal);
+  const carbs = Math.max(0, Math.round(c.targets.carbs - (c.targets.kcal - kcal) / 4));
+  store.setProfile({ ...c.profile, targets: { ...c.targets, kcal, carbs } });
+  store.setPlan({ finishAsked: true });
+};
+
 function nextSession(c, days, run) {
   const todayDay = days.find((d) => d.key === c.key);
   const next = rules.nextUp(days, c.key);
@@ -227,7 +254,7 @@ export function todayBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   const run = rules.missedRun(days, c.key);
-  return weekCard(c, days) + gapOffer(c, run) + stallNudge(c) + nextSession(c, days, run) +
+  return weekCard(c, days) + gapOffer(c, run) + finishOffer(c) + stallNudge(c) + nextSession(c, days, run) +
     calories(c, rules.totals(c.day.food ?? [])) + smallCards(c) +
     '<div class="status" data-sync></div>';
 }

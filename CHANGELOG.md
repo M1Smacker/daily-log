@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+- Settings has a "Your gym" card: the list of dumbbell weights can be edited.
+- A lift the gym does not have can be swapped for another one from the Workout screen, and undone there or in Settings. The swap starts with its own history.
+- The phase after the diet break offers a new calorie target once, worked out from the weight lost. Nothing changes unless it is accepted.
+- Guide: sample days and food swaps, linked from the Food screen.
+
 ## 0.4.0
 
 - Email and password sign-in, for iPhones, where the Google sign-in window does not work for this app. A password is added to the same account from Settings.

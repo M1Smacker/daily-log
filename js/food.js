@@ -30,6 +30,7 @@ function leftToday(c, eaten) {
         ${cell(t.carbs - eaten.carbs, ' g', 'carbs')}
         ${cell(t.fat - eaten.fat, ' g', 'fat')}
       </div>
+      <a class="link" href="#guide">Not sure what to eat? Sample days and swaps</a>
     </section>`;
 }
 

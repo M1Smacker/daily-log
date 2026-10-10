@@ -234,6 +234,27 @@ export function stallCheck(days, key, planStart) {
   return { status: shrunk ? 'recomp' : 'stall', drop, waistKnown: Boolean(earlier) };
 }
 
+// The calorie target for the phase after the diet break. Maintenance falls as the weight does:
+// about 10 kcal a day per kg at rest (Mifflin-St Jeor), times the plan's activity multiplier of 1.4.
+// Height and age have not changed, so they drop out, and the deficit stays the size it was.
+export const KCAL_PER_KG = 14;
+export function finishKcal(kcal, startKg, nowKg) {
+  const lost = Math.max(0, startKg - nowKg);
+  return Math.max(Math.min(kcal, KCAL_FLOOR), Math.round((kcal - KCAL_PER_KG * lost) / 10) * 10);
+}
+// True in the phase that follows a maintenance phase.
+export function afterBreak(key, phases) {
+  const i = phases.indexOf(phaseFor(key, phases));
+  return i > 0 && Boolean(phases[i - 1].maintenance);
+}
+
+// The dumbbell list as typed in Settings: "5, 7, 7.5 10". Returns it sorted, or null if it is not a list of weights.
+export function readDumbbells(text) {
+  const list = String(text).split(/[\s,;]+/).filter(Boolean).map(Number);
+  if (list.length < 2 || list.some((n) => !Number.isFinite(n) || n <= 0 || n > 100)) return null;
+  return [...new Set(list)].sort((a, b) => a - b);
+}
+
 // The next progress photo day on or after key. photos: { first, everyDays }
 export function nextPhotoDay(key, photos) {
   if (key <= photos.first) return photos.first;

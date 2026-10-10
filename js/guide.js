@@ -121,6 +121,62 @@ export const topics = [
     ],
   },
   {
+    // Foods and portions only. The day totals are personal numbers, so they stay out of the code.
+    group: 'What to eat',
+    items: [
+      {
+        title: 'A sample training day',
+        body: `
+          <p>Built around school, the gym in the early evening and study at night. It lands close to the targets, with plenty of fibre. Weigh things on a kitchen scale for the first two weeks so the portions become familiar.</p>
+          <dl>
+            <dt>Breakfast</dt><dd>Anda bhurji from 2 whole eggs and 150 g liquid egg whites, with onion, tomato and green chilli in 1 tsp oil. 1 medium whole-wheat roti. Chai with 150 ml low-fat milk and 1 tsp sugar.</dd>
+            <dt>Lunch</dt><dd>Chicken karahi from 150 g boneless chicken breast (weighed cooked) and 2 tsp oil. 1 cup cooked basmati rice. Kachumber salad.</dd>
+            <dt>Before the gym</dt><dd>1 scoop of whey in water. 1 medium banana and 3 small dates.</dd>
+            <dt>Dinner</dt><dd>1 cup masoor daal with a 1 tsp tarka. 1 medium roti. 75 g chicken tikka, grilled or air-fried. 200 g plain dahi or raita. 100 g bhindi, lauki or mixed sabzi in 1 tsp oil.</dd>
+          </dl>
+          <p>Hungry while studying late? Keep a little of dinner back for 150 g Greek yoghurt or a cup of laban.</p>`,
+      },
+      {
+        title: 'A keema and fish day',
+        body: `
+          <dl>
+            <dt>Breakfast</dt><dd>50 g oats cooked in 200 ml low-fat milk, half a scoop of whey stirred in after cooking, and 1 tbsp honey or a chopped apple.</dd>
+            <dt>Lunch</dt><dd>Chicken keema matar from 150 g lean chicken mince, peas and 2 tsp oil, with 2 medium roti.</dd>
+            <dt>Snack</dt><dd>2 boiled eggs, 1 apple and a cup of laban.</dd>
+            <dt>Dinner</dt><dd>200 g (raw weight) hamour, zubaidi or salmon, masala-rubbed and grilled or air-fried. 1 cup rice. Half a cup of chana daal. Salad.</dd>
+          </dl>`,
+      },
+      {
+        title: 'A pizza or fast-food night',
+        body: `
+          <p>Make breakfast and lunch very lean and high in protein, then enjoy the pizza. Once a week fits easily.</p>
+          <dl>
+            <dt>Breakfast</dt><dd>Omelette from 200 g egg whites and 1 whole egg, with onion, tomato and chilli. 1 roti.</dd>
+            <dt>Lunch</dt><dd>150 g grilled chicken breast, a big salad, and 1 cup rice or 1 roti.</dd>
+            <dt>Snack</dt><dd>1 scoop of whey in water and 1 fruit.</dd>
+            <dt>Dinner</dt><dd>3 slices of a medium thin-crust chicken pizza (not double cheese), a side salad, and water or a diet drink.</dd>
+          </dl>
+          <p>Skip the garlic bread, cheesy dips and full-sugar drinks. They can add 400 to 600 kcal without you noticing.</p>`,
+      },
+      {
+        title: 'Food swaps',
+        body: `
+          <p>When something is not in the house, swap it for one of these.</p>
+          <dl>
+            <dt>Egg whites</dt><dd>1 extra whole egg plus 100 g Greek yoghurt. Slightly more fat, so use 1 tsp less oil somewhere else.</dd>
+            <dt>Chicken breast</dt><dd>Skinless boneless thigh, fish, lean beef or mutton mince, or canned tuna in water. Thigh and red meat have more fat, so use a smaller portion or less oil.</dd>
+            <dt>Basmati rice</dt><dd>1 extra roti, or 1 medium boiled potato (about 150 g).</dd>
+            <dt>Roti</dt><dd>2 slices of brown bread, or half a paratha. Keep paratha for weekends.</dd>
+            <dt>Masoor daal</dt><dd>Moong daal, chana daal, lobia or rajma.</dd>
+            <dt>Dahi</dt><dd>Laban, Greek yoghurt or low-fat milk. Greek yoghurt has the most protein.</dd>
+            <dt>Whey</dt><dd>200 g Greek yoghurt, 3 boiled eggs, or 100 g canned tuna.</dd>
+            <dt>Banana and dates</dt><dd>1 apple or orange, or a slice of bread with honey.</dd>
+            <dt>Breaded chicken strips</dt><dd>Chicken breast strips dipped in egg and rolled in crushed cornflakes or panko with spices, then air-fried. Same crunch, about half the fat.</dd>
+          </dl>`,
+      },
+    ],
+  },
+  {
     group: 'Everything else',
     items: [
       {

@@ -5,6 +5,7 @@ import * as store from './store.js';
 import { ctx } from './state.js';
 import { esc, num, fmt, forms, actions, field, readNumber, openSheet, sheet } from './ui.js';
 import { VERSION } from './version.js';
+import { sessions } from './exercises.js';
 
 function numbersForm(p, button) {
   const t = p?.targets ?? {};
@@ -48,6 +49,19 @@ export function settingsBody() {
         <small>Anything logged before this counts towards the day before.</small>
       </label>
       <button class="btn">Save</button>
+    </form>
+    <form class="card" data-form="gym" novalidate>
+      <span class="card-title">Your gym</span>
+      <label class="field"><span>Dumbbells <i>kg</i></span>
+        <input name="dumbbells" type="text" autocomplete="off" value="${esc(c.plan.dumbbells.join(', '))}" required>
+        <small>Every dumbbell weight your gym has, with a comma between each. Use a dot for halves, like 7.5. A dumbbell lift goes up to the next weight on this list.</small>
+      </label>
+      <div class="form-error" role="alert" hidden></div>
+      <button class="btn">Save</button>
+      ${Object.entries(c.plan.swaps ?? {}).map(([id, s]) => `
+        <div class="row cardio-row"><span><b>${esc(s.name)}</b><br><small class="muted">in place of ${esc(LIFTS[id] ?? id)}</small></span>
+          <button type="button" class="btn compact quiet" data-act="unswap-lift" data-id="${esc(id)}">Undo</button></div>`).join('')}
+      <div class="small muted">To swap a lift your gym does not have, tap it on the Workout screen.</div>
     </form>
     <section class="card">
       <span class="card-title">The plan</span>
@@ -98,6 +112,8 @@ export function settingsBody() {
     </section>
     <div class="status plain">Version ${VERSION}</div>`;
 }
+
+const LIFTS = Object.fromEntries(Object.values(sessions).flat().map((e) => [e.id, e.name]));
 
 // ----- Backups -----
 
@@ -192,6 +208,13 @@ forms.profile = (fd, form) => {
   }
   store.setProfile(profile);
   if (location.hash === '#settings') return { done: 'Saved.' };
+};
+
+forms.gym = (fd) => {
+  const dumbbells = rules.readDumbbells(fd.get('dumbbells'));
+  if (!dumbbells) return 'Type at least two weights as numbers, like 5, 7.5, 10.';
+  store.setPlan({ dumbbells });
+  return { done: 'Saved.' };
 };
 
 forms.rollover = (fd) => {

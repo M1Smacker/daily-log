@@ -39,7 +39,7 @@ export const sessions = {
     ex('lateral-raise', 'Dumbbell lateral raise', 3, [12, 20], [60, 90], 'dumbbell', false, 'Cable lateral raise', 'Slight lean forward.'),
     ex('incline-curl', 'Incline dumbbell curl', 3, [8, 12], [90, 90], 'dumbbell', false, 'Bayesian cable curl, facing away', 'Bench at 45 to 60 degrees.'),
     ex('hammer-curl', 'Hammer curl', 2, [10, 12], [60, 90], 'dumbbell', false, 'Rope cable hammer curl'),
-    ex('spider-curl', 'Dumbbell spider curl', 2, [10, 15], [60, 60], 'dumbbell', false, 'Preacher-style curl over the back of the incline bench', 'Chest against the incline bench.'),
+    ex('spider-curl', 'Dumbbell spider curl', 2, [10, 15], [60, 60], 'dumbbell', false, 'Preacher-style dumbbell curl over the back of the incline bench', 'Chest against the incline bench.'),
   ],
   lowerB: [
     ex('romanian-deadlift', 'Barbell Romanian deadlift', 3, [6, 10], [120, 180], 'barbell', true, 'Dumbbell Romanian deadlift'),
@@ -52,3 +52,17 @@ export const sessions = {
     ex('shrug', 'Dumbbell shrug', 2, [10, 15], [60, 90], 'dumbbell', false, 'Smith machine shrug', '1 second hold at the top.'),
   ],
 };
+
+// A lift your gym does not have can be swapped for another one (plan.swaps, set from the Workout
+// screen). The swap keeps the place, sets and reps, but gets its own id so its weights start fresh.
+export const KINDS = { barbell: 'Barbell or Smith machine', machine: 'Machine or cable', dumbbell: 'Dumbbells', body: 'Bodyweight' };
+export const swapId = (id, name) => `${id}~${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+export const withSwaps = (list, swaps = {}) => list.map((ex) => {
+  const s = swaps[ex.id];
+  return s && KINDS[s.kind] && s.name
+    ? { ...ex, id: swapId(ex.id, s.name), base: ex.id, name: s.name, kind: s.kind, alt: '', note: `In place of: ${ex.name}.` }
+    : ex;
+});
+// A first guess at what the listed alternative uses, from its name. It can be changed before saving.
+export const altKind = (alt) =>
+  (/smith|barbell/i.test(alt) ? 'barbell' : /dumbbell/i.test(alt) ? 'dumbbell' : /cable|machine|leg press/i.test(alt) ? 'machine' : 'body');

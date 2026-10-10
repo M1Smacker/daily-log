@@ -11,7 +11,7 @@
 import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx } from './state.js';
-import { sessions } from './exercises.js';
+import { sessions, withSwaps, altKind, KINDS } from './exercises.js';
 import { sheet, esc, num, longDate, CHEVRON, actions, forms, app, field, readNumber } from './ui.js';
 
 const CARDIO = ['Easy bike', 'Bike intervals', 'Treadmill walk', 'Other'];
@@ -39,7 +39,7 @@ function view() {
     session: sessionId, minimum: marked ? mark === 'min' : Boolean(ui.wantMinimum), finished: marked,
     rirLo: rules.targetRir(phase, key)[0], half: phase?.load === 'half', lifts: {},
   };
-  const all = sessions[sessionId];
+  const all = withSwaps(sessions[sessionId], c.plan.swaps);
   const lifts = (w.minimum ? all.slice(0, rules.MIN_EXERCISES) : all).map((ex, i) => {
     const last = lastTime(c, ex.id, key);
     let p = rules.progression(ex, last, c.plan.dumbbells);
@@ -47,7 +47,7 @@ function view() {
     if (phase?.load === 'half' && ['jump', 'extra', 'cap'].includes(p.type)) p = { type: 'hold', kg: p.kg, deload: true };
     return {
       ...ex, n: i + 1, last, p,
-      planned: rules.setsFor(ex, phase, key, w.minimum) + (extraSet(c, phase, sessionId, ex.id, w.minimum) ? 1 : 0),
+      planned: rules.setsFor(ex, phase, key, w.minimum) + (extraSet(c, phase, sessionId, ex.base ?? ex.id, w.minimum) ? 1 : 0),
       target: p.type === 'jump' ? p.to : p.kg ?? null,
       entry: w.lifts?.[ex.id],
     };
@@ -132,8 +132,31 @@ function sheetRow(v, ex) {
             <a class="btn compact" href="${video(ex.name)}" target="_blank" rel="noopener">Form video</a>
             <button type="button" class="btn compact" data-act="start-rest" data-sec="${ex.rest[1]}">Rest ${clock(ex.rest[1])}</button>
           </div>
+          ${swapPart(ex)}
         </div>` : ''}
     </div>`;
+}
+
+// Swapping a lift the gym does not have, for good. The listed alternative is filled in to start with.
+function swapPart(ex) {
+  if (ex.base) return `<button type="button" class="link" data-act="unswap-lift" data-id="${ex.base}">Go back to the original lift</button>`;
+  const guess = ex.alt.split(',')[0];
+  return `
+    <details>
+      <summary class="link">Your gym does not have this? Swap it</summary>
+      <form class="stack" data-form="swap-lift" novalidate>
+        <input type="hidden" name="id" value="${ex.id}">
+        <label class="field"><span>Do this instead</span>
+          <input name="name" type="text" maxlength="60" autocomplete="off" value="${esc(guess)}" required>
+        </label>
+        <label class="field"><span>It uses</span>
+          <select name="kind">${Object.entries(KINDS).map(([k, label]) =>
+            `<option value="${k}"${k === (guess ? altKind(guess) : ex.kind) ? ' selected' : ''}>${label}</option>`).join('')}</select>
+          <small>This sets how the weight goes up. The new lift starts with no history.</small>
+        </label>
+        <button class="btn compact">Swap from now on</button>
+      </form>
+    </details>`;
 }
 
 // One lift in the recap: the weight, and the fewest reps on any set.
@@ -281,6 +304,18 @@ actions['pick-extra'] = (el) => {
   const now = ctx().plan.pushExtra ?? [];
   const m = el.dataset.muscle;
   store.setPlan({ pushExtra: now.includes(m) ? now.filter((x) => x !== m) : [...now, m].slice(-2) });
+};
+forms['swap-lift'] = (fd) => {
+  const name = String(fd.get('name')).trim().slice(0, 60);
+  const kind = String(fd.get('kind'));
+  if (!name || !KINDS[kind]) return 'Type the name of the lift you will do instead.';
+  ui.openLift = null;
+  store.setPlan({ swaps: { ...ctx().plan.swaps, [fd.get('id')]: { name, kind } } });
+};
+actions['unswap-lift'] = (el) => {
+  const { [el.dataset.id]: gone, ...swaps } = ctx().plan.swaps ?? {};
+  ui.openLift = null;
+  store.setPlan({ swaps });
 };
 actions['open-lift'] = (el) => { ui.openLift = ui.openLift === el.dataset.ex ? null : el.dataset.ex; app.redraw(); };
 actions['toggle-minimum'] = () => {
