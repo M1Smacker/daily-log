@@ -26,7 +26,7 @@ const LISTS = { recent: 'Recent', mine: 'My foods', meals: 'Meals', recipes: 'Re
 // Where a food's numbers came from. Shown wherever the food is picked.
 const SOURCES = {
   usda: 'USDA', off: 'Open Food Facts', web: 'From the web, approximate',
-  plan: 'From your plan, approximate', own: 'You typed it', label: 'Read from the pack, checked by you',
+  plan: 'From your plan, approximate', est: 'An estimate, approximate', own: 'You typed it', label: 'Read from the pack, checked by you',
 };
 const GRAM_STEP = 10;
 const SERVING_STEP = 0.5;
@@ -753,6 +753,8 @@ forms.quick = (fd) => {
 
 // ----- Editing a logged entry -----
 
+const NUTRIENTS = rules.NUTRIENTS;
+
 actions['open-entry'] = (el) => {
   const e = (ctx().day.food ?? []).find((x) => x.id === el.dataset.id);
   if (!e) return;
@@ -766,6 +768,15 @@ actions['open-entry'] = (el) => {
       <label class="field"><span>Meal</span>
         <select name="meal">${Object.entries(MEALS).map(([id, name]) => `<option value="${id}"${id === e.meal ? ' selected' : ''}>${name}</option>`).join('')}</select>
       </label>
+      <div class="rule"></div>
+      <div class="eyebrow">Nutrients for this entry</div>
+      <div class="field-grid">
+        ${field('kcal', 'Calories', e.kcal, { unit: 'kcal' })}
+        ${field('protein', 'Protein', e.protein, { unit: 'g', required: false })}
+        ${field('carbs', 'Carbs', e.carbs, { unit: 'g', required: false })}
+        ${field('fat', 'Fat', e.fat, { unit: 'g', required: false })}
+      </div>
+      <div class="small muted">Fill in or correct these for what you actually ate. Change only the amount and they scale by themselves. This changes today's entry, not the saved food.</div>
       <button class="btn primary">Save</button>
       <button type="button" class="btn" data-act="delete-entry" data-id="${esc(e.id)}">Remove from today</button>
       <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
@@ -776,10 +787,12 @@ forms.entry = (fd, form) => {
   const c = ctx();
   const amount = readNumber(fd, 'amount');
   if (!amount || amount > MAX_AMOUNT) return 'Type an amount above zero. That one looks too big to be right.';
+  const typed = Object.fromEntries(NUTRIENTS.map((k) => [k, readNumber(fd, k)]));
+  if (typed.kcal === null || typed.kcal > MAX_KCAL) return 'Calories need a number. Protein, carbs and fat can be left empty if you do not know them.';
+  if (Math.max(typed.protein ?? 0, typed.carbs ?? 0, typed.fat ?? 0) > 1000) return 'One of those numbers is too big. Check for a slip.';
   const food = (c.day.food ?? []).map((e) => {
     if (e.id !== form.dataset.id) return e;
-    // Scale what was logged. The saved food may have been edited since, and this entry is a record.
-    return { ...e, ...rules.portionBy(e, amount / e.amount, 'serving'), amount, meal: MEALS[fd.get('meal')] ? fd.get('meal') : e.meal };
+    return rules.editEntry(e, amount, typed, MEALS[fd.get('meal')] ? fd.get('meal') : e.meal);
   });
   store.setDay(c.key, { food });
 };

@@ -58,3 +58,14 @@ test('foods: every food has a name, calories and a usable serving', () => {
     if (f.byGrams) assert.ok(f.grams > 0, f.id);
   }
 });
+
+test('editEntry: a changed amount scales, typed nutrients are kept as typed', () => {
+  const e = { id: 'a', name: 'Roti', meal: 'lunch', amount: 2, unit: 'serving', kcal: 220, protein: 6, carbs: 44, fat: 3, fibre: 6 };
+  const same = { kcal: 220, protein: 6, carbs: 44, fat: 3 };
+  assert.deepEqual(r.editEntry(e, 1, same, 'dinner'), { ...e, amount: 1, meal: 'dinner', kcal: 110, protein: 3, carbs: 22, fat: 1.5, fibre: 3 });
+  // A quick add that went in with calories only, filled in afterwards.
+  const quick = { id: 'q', name: 'Quick add', meal: 'lunch', amount: 1, unit: 'serving', kcal: 300, protein: null, carbs: null, fat: null, fibre: null };
+  assert.deepEqual(r.editEntry(quick, 1, { kcal: 300, protein: 25, carbs: null, fat: 12 }, 'lunch'), { ...quick, protein: 25, fat: 12 });
+  // Nothing touched: nothing changes.
+  assert.deepEqual(r.editEntry(quick, 1, { kcal: 300, protein: null, carbs: null, fat: null }, 'lunch'), quick);
+});

@@ -59,4 +59,11 @@ export const foods = [
   { id: 'chicken-korma', name: 'Chicken korma', serving: '100 g', byGrams: true, grams: 100, amount: 250, kcal: 160, protein: 10.5, carbs: 10, fat: 4.5, fibre: null, source: 'web' },
   { id: 'haleem', name: 'Haleem', serving: '100 g', byGrams: true, grams: 100, amount: 250, kcal: 128, protein: null, carbs: null, fat: null, fibre: null, source: 'web' },
   { id: 'aloo-gosht', name: 'Aloo gosht', serving: '100 g', byGrams: true, grams: 100, amount: 250, kcal: 195, protein: null, carbs: null, fat: null, fibre: null, source: 'web' },
+
+  // Home and bakery foods with no good source: estimates from typical recipes and portions.
+  { id: 'khubz', name: 'Khubz', serving: '1 medium (about 60 g)', grams: 60, amount: 1, kcal: 165, protein: 5.5, carbs: 33, fat: 1, fibre: null, source: 'est' },
+  { id: 'tandoori-roti', name: 'Tandoori roti', serving: '1 piece (about 95 g)', grams: 95, amount: 1, kcal: 250, protein: 8, carbs: 50, fat: 2, fibre: null, source: 'est' },
+  { id: 'qeema-matar', name: 'Qeema matar', serving: '100 g (half a plate is about 150 g)', byGrams: true, grams: 100, amount: 150, kcal: 180, protein: 13.3, carbs: 5.3, fat: 11.3, fibre: null, source: 'est' },
+  { id: 'roast-chicken-thigh', name: 'Roast chicken thigh, with skin', serving: '1 piece (about 110 g of meat)', grams: 110, amount: 1, kcal: 250, protein: 26, carbs: 0, fat: 16, fibre: null, source: 'est' },
+  { id: 'roast-potato-tomato', name: 'Roast potato and tomato', serving: '100 g (1 medium potato with tomato is about 190 g)', byGrams: true, grams: 100, amount: 190, kcal: 90, protein: 1.6, carbs: 16, fat: 2.1, fibre: null, source: 'est' },
 ];

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.6
+
+- Tap any logged food, in any meal, to fill in or correct its calories, protein, carbs and fat. Useful for a Quick add that went in with calories only.
+- Five more built-in foods, marked as estimates: khubz, tandoori roti, qeema matar, roast chicken thigh, roast potato and tomato.
+
 ## 0.10.5
 
 - After adding a food, the Add screen shows a short "Added" line with its name and calories.

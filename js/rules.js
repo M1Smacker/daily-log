@@ -284,6 +284,15 @@ export function portionBy(food, amount, unit) {
   return Object.fromEntries(MACROS.map((m) => [m, food[m] == null ? null : round1(food[m] * servings)]));
 }
 
+// A logged entry after it was edited. typed: the nutrient boxes as they were saved, null when empty.
+// Nutrients changed by hand are taken as they are, for the new amount. If only the amount changed,
+// what was logged is scaled: the saved food may have been edited since, and the entry is a record.
+export const NUTRIENTS = ['kcal', 'protein', 'carbs', 'fat'];
+export function editEntry(e, amount, typed, meal) {
+  if (NUTRIENTS.some((k) => typed[k] !== (e[k] ?? null))) return { ...e, ...typed, amount, meal };
+  return { ...e, ...portionBy(e, amount / e.amount, 'serving'), amount, meal };
+}
+
 // What a recipe gives per serving. items: logged-style entries with their macros.
 // If one ingredient has no figure for a macro, the recipe has none for it either.
 export function recipeServing(items, servings) {
