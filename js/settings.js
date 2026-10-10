@@ -68,7 +68,7 @@ export function settingsBody() {
       <div class="muted" style="font-size:14px">The Food screen can search the USDA food list for plain foods like fish, fruit and nuts. USDA asks for a free key. <a class="link" href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">Get a key</a></div>
       <label class="field"><span>USDA key</span>
         <input name="usdaKey" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="80" value="${esc(c.plan.usdaKey ?? '')}">
-        <small>Kept in your private data, not in the app's public code. It is also in your backup files. A lookup sends USDA the words you searched for and nothing else.</small>
+        <small>Kept in your private data, not in the app's public code. It is also in your backup files. A lookup sends USDA the words you searched for and nothing else. A barcode scan sends Open Food Facts the barcode number and nothing else.</small>
       </label>
       <div class="form-error" role="alert" hidden></div>
       <button class="btn">Save</button>

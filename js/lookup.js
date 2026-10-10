@@ -56,3 +56,44 @@ export async function searchUsda(query, key, today) {
   const data = await res.json();
   return (data.foods ?? []).map((f) => fromUsda(f, today)).filter(Boolean);
 }
+
+// ----- Open Food Facts: packaged foods by barcode -----
+// A free, volunteer-run list. No key. Entries can be missing or wrong, so check the label.
+
+export const isBarcode = (code) => /^\d{8,14}$/.test(code);
+
+// A product as a food per 100 g. kcal is null when the entry has no energy figure:
+// the caller then asks for the numbers from the label instead.
+export function fromOff(product, code, today) {
+  const n = product?.nutriments ?? {};
+  const r = (v) => (known(v) === null ? null : round1(v));
+  const kj = known(n['energy_100g']);
+  const kcal = known(n['energy-kcal_100g']) ?? (kj === null ? null : kj / 4.184);
+  const brand = String(product?.brands ?? '').split(',')[0].trim();
+  const name = String(product?.product_name ?? '').trim();
+  const serving = known(Number(product?.serving_quantity));
+  return {
+    id: `off-${code}`, barcode: code, name: (name ? `${name}${brand && !name.includes(brand) ? ` (${brand})` : ''}` : `Product ${code}`).slice(0, 80),
+    serving: /\d\s*(ml|cl|l)\b/i.test(String(product?.quantity ?? '')) ? '100 ml' : '100 g',
+    byGrams: true, grams: 100, amount: serving && serving <= 1000 ? serving : 100,
+    kcal: kcal === null ? null : Math.round(kcal), protein: r(n.proteins_100g), carbs: r(n.carbohydrates_100g), fat: r(n.fat_100g), fibre: r(n.fiber_100g),
+    source: 'off', sourceId: code, fetched: today,
+    ...extras({ sugar: r(n.sugars_100g), satFat: r(n['saturated-fat_100g']), salt: known(n.salt_100g) === null ? null : Math.round(n.salt_100g * 100) / 100 }),
+  };
+}
+
+// Returns the food, or null when Open Food Facts does not have the barcode.
+// Throws an Error whose message is a sentence that can be shown.
+export async function findBarcode(code, today) {
+  let res;
+  try {
+    res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=code,product_name,brands,quantity,serving_quantity,nutriments`);
+  } catch {
+    throw new Error('No connection. A lookup needs the internet.');
+  }
+  if (res.status === 404) return null;
+  if (res.status === 429) throw new Error('Too many lookups for now. Try again in a minute.');
+  if (!res.ok) throw new Error('Open Food Facts did not answer. Try again in a minute.');
+  const data = await res.json();
+  return data.status === 1 && data.product ? fromOff(data.product, code, today) : null;
+}

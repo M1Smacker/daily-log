@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.0
+
+- Scan a barcode from the Add screen, or type the number under it. Packaged foods come from Open Food Facts and are saved to My foods. A product that is not listed opens New food with the barcode kept, so the next scan finds your own entry.
+- The scanner is the open-source ZXing library, kept inside the app (`vendor/`, Apache 2.0 licence).
+
 ## 0.7.0
 
 - Food lookups: with a free USDA key saved in Settings, the Add screen can search the USDA food list for plain foods. A food picked from it is saved to My foods, so it works offline afterwards.

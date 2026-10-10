@@ -199,7 +199,10 @@ function addScreen(c) {
         <button type="button" class="btn compact" data-act="edit-food">New food</button>
         <button type="button" class="btn compact" data-act="new-recipe">New recipe</button>
       </div>
-      <button type="button" class="btn compact" data-act="quick-add">Quick add calories</button>`}`;
+      <div class="pair">
+        <button type="button" class="btn compact" data-act="scan">Scan a barcode</button>
+        <button type="button" class="btn compact" data-act="quick-add">Quick add</button>
+      </div>`}`;
 }
 
 export function foodBody() {
@@ -345,6 +348,96 @@ actions['add-meal'] = (el) => {
   if (entries.length) log(c, entries.map((e) => ({ ...e, id: newId() })));
 };
 
+// ----- Barcodes: the camera, or the number typed in -----
+// Your own foods are checked first, so a product you have saved is found without the internet.
+
+let reader = null; // the running scanner, so it can be stopped
+let zxing = null; // the scanner library, loaded the first time it is needed
+const loadScanner = () => (zxing ??= new Promise((ok, fail) => {
+  const s = Object.assign(document.createElement('script'), { src: 'vendor/zxing.min.js', onload: ok, onerror: () => { zxing = null; fail(); } });
+  document.head.append(s);
+}));
+function stopCamera() {
+  try { reader?.reset(); } catch { /* already stopped */ }
+  reader = null;
+}
+sheet.addEventListener('close', stopCamera);
+
+async function startCamera() {
+  const form = sheet.querySelector('[data-form="barcode"]');
+  const say = (text) => { const el = sheet.querySelector('[data-scan-msg]'); if (el) el.textContent = text; };
+  const typeIt = 'Type the number under the barcode instead.';
+  if (!navigator.mediaDevices?.getUserMedia) return say(`This browser cannot use the camera here. ${typeIt}`);
+  try {
+    await loadScanner();
+  } catch {
+    return say(`The scanner could not load. ${typeIt}`);
+  }
+  if (!form.isConnected) return;
+  const Z = window.ZXing;
+  const hints = new Map([[Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]]]);
+  reader = new Z.BrowserMultiFormatReader(hints);
+  try {
+    await reader.decodeFromConstraints({ video: { facingMode: 'environment' } }, sheet.querySelector('[data-scan-video]'), (result) => {
+      if (!result || !form.isConnected) return;
+      stopCamera();
+      form.querySelector('[name="code"]').value = result.getText();
+      form.requestSubmit();
+    });
+    say('Point the camera at the barcode.');
+  } catch {
+    stopCamera();
+    say(`The camera is blocked or missing. ${typeIt}`);
+  }
+}
+
+actions.scan = () => {
+  openSheet(`
+    <form class="sheet-body" data-form="barcode" novalidate>
+      <div>
+        <div class="card-title">Scan a barcode</div>
+        <div class="muted" style="font-size:14px">For packaged food. The numbers come from Open Food Facts, a free list filled in by volunteers, so check them against the label the first time.</div>
+      </div>
+      <video class="scan-video" playsinline muted data-scan-video></video>
+      <div class="small muted" data-scan-msg>Starting the camera.</div>
+      <label class="field"><span>Or type the number</span>
+        <input name="code" type="text" inputmode="numeric" autocomplete="off" maxlength="14">
+      </label>
+      <button class="btn primary">Look it up</button>
+      <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
+    </form>`);
+  startCamera();
+};
+
+let prefill = null; // a name and barcode waiting for the New food form
+
+forms.barcode = async (fd, form) => {
+  const c = ctx();
+  const code = String(fd.get('code')).replace(/\s/g, '');
+  if (!lookup.isBarcode(code)) return 'A barcode number is 8 to 14 digits.';
+  let f = c.foods.find((x) => x.barcode === code);
+  if (!f) {
+    const button = form.querySelector('button.primary');
+    button.disabled = true;
+    try {
+      f = await lookup.findBarcode(code, c.key);
+    } catch (e) {
+      return e.message;
+    } finally {
+      button.disabled = false;
+    }
+    // Not on the list, or listed without calories: the numbers come from the label instead.
+    if (!f || f.kcal === null) {
+      prefill = { name: f && !f.name.startsWith('Product ') ? f.name : '', barcode: code };
+      setTimeout(() => actions['edit-food']({ dataset: {} }), 0);
+      return;
+    }
+    store.setFood(f.id, f);
+  }
+  const food = f;
+  setTimeout(() => { ui.food.pick = { id: food.id, unit: unitsOf(food)[0], amount: startAmount(food, unitsOf(food)[0]) }; openPick(); }, 0);
+};
+
 // ----- Quick add: calories typed straight in -----
 
 actions['quick-add'] = () => openSheet(`
@@ -424,10 +517,14 @@ const textField = (name, label, value, hint = '') => `
 actions['edit-food'] = (el) => {
   const f = ctx().foods.find((x) => x.id === el.dataset.id) ?? {};
   if (f.recipe) return openRecipe(f);
+  const from = f.id ? f : prefill ?? {};
+  prefill = null;
   openSheet(`
     <form class="sheet-body" data-form="food" data-id="${esc(f.id ?? '')}" novalidate>
       <div class="card-title">${f.id ? 'Edit food' : 'New food'}</div>
-      ${textField('name', 'Name', f.name ?? ui.food.search)}
+      ${from.barcode ? `<input type="hidden" name="barcode" value="${esc(from.barcode)}">` : ''}
+      ${!f.id && from.barcode ? '<div class="note"><b>Not on the list</b>Open Food Facts does not have this one with its numbers. Type them from the label once, and the next scan will find it here.</div>' : ''}
+      ${textField('name', 'Name', f.name ?? (from.name || ui.food.search))}
       ${textField('serving', 'One serving is', f.serving, 'For example "1 plate" or "100 g, from the pack".')}
       <div class="field-grid">
         ${field('kcal', 'Calories', f.kcal, { unit: 'kcal' })}
@@ -463,6 +560,8 @@ forms.food = (fd, form) => {
   // Numbers that were changed by hand are yours now, whatever the food started as.
   const food = { id, name, serving, kcal: n.kcal, protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre, amount: 1, source: 'own' };
   // A food that was logged by weight stays that way. A new one with grams can be logged either way.
+  const barcode = String(fd.get('barcode') ?? '');
+  if (lookup.isBarcode(barcode)) food.barcode = barcode;
   if (n.grams) Object.assign(food, { grams: n.grams }, old?.byGrams ? { byGrams: true, amount: old.amount ?? n.grams } : {});
   ui.food.search = '';
   store.setFood(id, food);
