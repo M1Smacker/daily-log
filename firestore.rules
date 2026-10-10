@@ -71,7 +71,7 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && food.size() <= 60
-          && request.resource.data.size() <= 15
+          && request.resource.data.size() <= 20
           && request.resource.data.id == food
           && (('hidden' in request.resource.data)
               || (request.resource.data.name is string && request.resource.data.name.size() <= 80

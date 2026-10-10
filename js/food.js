@@ -9,6 +9,7 @@ import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx } from './state.js';
 import { sheet, esc, num, shortDate, actions, forms, app, openSheet, field, readNumber } from './ui.js';
+import * as lookup from './lookup.js';
 
 const MEALS = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snacks', dinner: 'Dinner' };
 const LISTS = { recent: 'Recent', mine: 'My foods', meals: 'Meals', recipes: 'Recipes' };
@@ -99,7 +100,7 @@ function listHtml(c) {
   const byName = [...c.foods].sort((a, b) => a.name.localeCompare(b.name));
   if (q) {
     const hits = byName.filter((f) => f.name.toLowerCase().includes(q));
-    return hits.length ? hits.map((f) => foodRow(f)).join('') : none('No saved food matches. Use New food below to add it.');
+    return (hits.length ? hits.map((f) => foodRow(f)).join('') : none('No saved food matches. Use New food below to add it.')) + lookupHtml(c, q);
   }
   const list = ui.food.picking && ['meals', 'recipes'].includes(ui.food.list) ? 'mine' : ui.food.list;
   if (list === 'mine') return byName.map((f) => foodRow(f)).join('');
@@ -126,6 +127,55 @@ function listHtml(c) {
   return recent.length ? recent.map(([f, r]) => foodRow(f, r)).join('')
     : none('Nothing logged lately. Your saved foods are under My foods.');
 }
+
+// Under the search results: looking the same words up outside the app.
+// ui.food.found holds the last lookup: { q, loading, error, foods }.
+function lookupHtml(c, q) {
+  if (q.length < 2) return '';
+  const found = ui.food.found?.q === q ? ui.food.found : null;
+  const button = c.plan.usdaKey
+    ? `<button type="button" class="btn compact" data-act="usda-search">Search USDA for "${esc(q)}"</button>`
+    : '<div class="small muted">To search the USDA food list as well, add your free key in Settings.</div>';
+  if (!found) return `<div class="lookup">${button}</div>`;
+  if (found.loading) return '<div class="lookup"><div class="small muted">Looking.</div></div>';
+  if (found.error) return `<div class="lookup"><div class="form-error" role="alert">${esc(found.error)}</div>${button}</div>`;
+  return `<div class="lookup"><div class="eyebrow">From USDA, per 100 g</div>${found.foods.length
+    ? found.foods.map((f, i) => `
+      <div class="food-row">
+        <button type="button" class="entry" data-act="pick-found" data-i="${i}">
+          <span><b>${esc(f.name)}</b><small>100 g</small></span>
+          <span class="entry-nums"><b>${num(f.kcal)} kcal</b><small>${protein(f)}</small></span>
+        </button>
+      </div>`).join('')
+    : '<div class="small muted">USDA has nothing under those words. Try a plainer name, like "salmon" or "almonds".</div>'}</div>`;
+}
+
+const repaintList = () => { const box = document.querySelector('[data-food-list]'); if (box) box.innerHTML = listHtml(ctx()); };
+
+actions['usda-search'] = async () => {
+  const c = ctx();
+  const q = ui.food.search.trim().toLowerCase();
+  if (q.length < 2 || !c.plan.usdaKey) return;
+  ui.food.found = { q, loading: true };
+  repaintList();
+  try {
+    ui.food.found = { q, foods: await lookup.searchUsda(q, c.plan.usdaKey, c.key) };
+  } catch (e) {
+    ui.food.found = { q, error: e.message };
+  }
+  repaintList();
+};
+
+// A food picked from a lookup is saved to My foods, so it is there next time without the internet.
+actions['pick-found'] = (el) => {
+  const f = ui.food.found?.foods?.[Number(el.dataset.i)];
+  if (!f) return;
+  ui.food.pick = { id: f.id, unit: 'g', amount: f.amount };
+  ui.food.search = '';
+  if (!ctx().foods.some((x) => x.id === f.id)) store.setFood(f.id, f);
+  else app.redraw();
+  openPick();
+};
 
 function addScreen(c) {
   const picking = ui.food.picking;
@@ -172,8 +222,7 @@ actions['pick-list'] = (el) => { ui.food.list = el.dataset.list; ui.food.search 
 document.addEventListener('input', (e) => {
   if (e.target.matches('[data-search]')) {
     ui.food.search = e.target.value;
-    const box = document.querySelector('[data-food-list]');
-    if (box) box.innerHTML = listHtml(ctx());
+    repaintList();
   } else if (e.target.matches('[data-amount]')) {
     const n = Number(e.target.value.replace(',', '.'));
     if (!ui.food.pick || !Number.isFinite(n) || n <= 0 || n > MAX_AMOUNT) return;
@@ -187,6 +236,13 @@ document.addEventListener('input', (e) => {
 });
 
 // ----- The amount sheet: one food, how much, which unit -----
+
+// Sugar, saturated fat and salt, for foods that came with them. Shown, never counted.
+const EXTRA = { sugar: 'sugar', satFat: 'saturated fat', salt: 'salt' };
+const extraText = (f) => {
+  const parts = Object.entries(EXTRA).filter(([k]) => f.extra?.[k] != null).map(([k, label]) => `${label} ${f.extra[k]} g`);
+  return parts.length ? `. In ${esc(f.serving.split(',')[0])}: ${parts.join(', ')}` : '';
+};
 
 const pickedFood = () => ctx().foods.find((f) => f.id === ui.food.pick?.id);
 
@@ -211,7 +267,7 @@ function openPick() {
       <div>
         <div class="card-title">${esc(f.name)}</div>
         <div class="muted" style="font-size:14px">${esc(f.serving)}: ${num(f.kcal)} kcal, ${protein(f)}</div>
-        <div class="small muted">${source(f)}</div>
+        <div class="small muted">${source(f)}${extraText(f)}</div>
       </div>
       ${units.length > 1 ? `
         <div class="seg n2" role="group" aria-label="Unit">

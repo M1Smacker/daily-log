@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0
+
+- Food lookups: with a free USDA key saved in Settings, the Add screen can search the USDA food list for plain foods. A food picked from it is saved to My foods, so it works offline afterwards.
+- Looked-up foods show sugar, saturated fat and salt when the source has them. These are shown, not counted.
+
 ## 0.6.0
 
 - Food screen rebuilt: Breakfast, Lunch, Snacks and Dinner each have their own Add button. Adding opens one screen with search, Recent (one tap to add the same amount again), My foods, Meals (add an earlier meal again in one tap) and Recipes.

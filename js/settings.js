@@ -63,6 +63,16 @@ export function settingsBody() {
           <button type="button" class="btn compact quiet" data-act="unswap-lift" data-id="${esc(id)}">Undo</button></div>`).join('')}
       <div class="small muted">To swap a lift your gym does not have, tap it on the Workout screen.</div>
     </form>
+    <form class="card" data-form="lookups" novalidate>
+      <span class="card-title">Food lookups</span>
+      <div class="muted" style="font-size:14px">The Food screen can search the USDA food list for plain foods like fish, fruit and nuts. USDA asks for a free key. <a class="link" href="https://fdc.nal.usda.gov/api-key-signup" target="_blank" rel="noopener">Get a key</a></div>
+      <label class="field"><span>USDA key</span>
+        <input name="usdaKey" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="80" value="${esc(c.plan.usdaKey ?? '')}">
+        <small>Kept in your private data, not in the app's public code. It is also in your backup files. A lookup sends USDA the words you searched for and nothing else.</small>
+      </label>
+      <div class="form-error" role="alert" hidden></div>
+      <button class="btn">Save</button>
+    </form>
     <section class="card">
       <span class="card-title">The plan</span>
       <a class="btn" href="#guide">Open the guide</a>
@@ -215,6 +225,13 @@ forms.gym = (fd) => {
   if (!dumbbells) return 'Type at least two weights as numbers, like 5, 7.5, 10.';
   store.setPlan({ dumbbells });
   return { done: 'Saved.' };
+};
+
+forms.lookups = (fd) => {
+  const usdaKey = String(fd.get('usdaKey')).trim();
+  if (usdaKey && !/^[A-Za-z0-9]{20,80}$/.test(usdaKey)) return 'That does not look like a USDA key. It is a long run of letters and numbers.';
+  store.setPlan({ usdaKey: usdaKey || null });
+  return { done: usdaKey ? 'Saved. Search for a food on the Food screen to try it.' : 'Removed.' };
 };
 
 forms.rollover = (fd) => {
