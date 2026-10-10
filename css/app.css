@@ -706,6 +706,10 @@ button:disabled { opacity: 0.35; cursor: default; }
 .food-row .entry { flex: 1; min-width: 0; border-top: 0; color: var(--text); }
 .food-row .entry > span:first-child { flex: 1; }
 .entry.as-text { min-height: 56px; }
+.day-nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.day-nav b { font: 700 22px/1 var(--display); text-transform: uppercase; letter-spacing: 0.02em; }
+.scan-box { position: relative; }
+.scan-box i { position: absolute; inset: 30% 10%; border: 2px solid var(--protein); border-radius: 10px; pointer-events: none; }
 .scan-video { width: 100%; aspect-ratio: 4 / 3; border-radius: 14px; background: var(--raised); object-fit: cover; }
 .lookup { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; margin-top: 6px; border-top: 1px solid var(--line-strong); }
 .seg.n2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

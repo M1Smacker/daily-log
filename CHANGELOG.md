@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.0
+
+- The Food screen can step back to earlier days, to add or fix a meal that was missed. Leaving the tab returns it to today.
+- Barcode scanner: asks the camera for a sharper picture, reads tilted or slightly blurred barcodes, shows a frame to aim with, and uses the phone's own barcode reader where there is one.
+
 ## 0.8.2
 
 - A scanned barcode that is not on the list opens "Copy the label": the boxes follow the order of a nutrition label, energy can be typed in kcal or kJ, and the numbers can be per 100 g or per serving weight.

@@ -117,6 +117,8 @@ function render(nav = true) {
   const tab = ['workout', 'food', 'progress', 'settings', 'guide'].includes(hash) ? hash : 'today';
   // Leaving the Workout tab drops any past session that was open, so it always comes back on today.
   if (nav && tab !== 'workout' && ui.tab === 'workout') ui.workoutDay = null;
+  // The same for an earlier day on the Food tab, so food is never logged on the wrong day by accident.
+  if (nav && tab !== 'food' && ui.tab === 'food') ui.food.day = null;
   ui.enter = nav && ui.tab && ui.tab !== tab ? enterFrom(ui.tab, tab) : '';
   ui.tab = tab;
 
@@ -215,6 +217,7 @@ function refreshIfDayChanged() {
   const key = ctx().key;
   if (shownDay && key !== shownDay) {
     ui.workoutDay = null;
+    ui.food.day = null;
     ui.calendarOpen = false;
     render(false);
   }

@@ -7,10 +7,19 @@
 
 import * as rules from './rules.js';
 import * as store from './store.js';
-import { ui, ctx } from './state.js';
-import { sheet, esc, num, shortDate, actions, forms, app, openSheet, field, readNumber } from './ui.js';
+import { ui, ctx as appCtx } from './state.js';
+import { sheet, esc, num, shortDate, longDate, actions, forms, app, openSheet, field, readNumber } from './ui.js';
 import * as lookup from './lookup.js';
 import { foods as preloaded } from './foods.js';
+
+// The Food screen can show an earlier day (ui.food.day), for a meal that was forgotten.
+// Everything below reads and saves through this, so `key` and `day` are the day on screen
+// and `today` is the real one.
+const ctx = () => {
+  const c = appCtx();
+  const key = ui.food.day && ui.food.day < c.key ? ui.food.day : c.key;
+  return { ...c, today: c.key, key, day: c.data.days[key] ?? {} };
+};
 
 const MEALS = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snacks', dinner: 'Dinner' };
 const LISTS = { recent: 'Recent', mine: 'My foods', meals: 'Meals', recipes: 'Recipes' };
@@ -50,7 +59,7 @@ function leftToday(c, eaten) {
   };
   return `
     <section class="card">
-      <span class="card-title">Left today</span>
+      <span class="card-title">${c.key === c.today ? 'Left today' : 'Left that day'}</span>
       <div class="left-grid">
         ${cell(t.kcal - eaten.kcal, '', 'kcal')}
         ${cell(t.protein - eaten.protein, ' g', 'protein', 'protein-ink')}
@@ -188,7 +197,7 @@ function addScreen(c) {
     <div class="add-head">
       <button type="button" class="link" data-act="${picking ? 'recipe-back' : 'close-add'}">${picking ? 'Back to the recipe' : 'Done'}</button>
       <div class="food-name">${picking ? 'Pick an ingredient' : `Add to ${MEALS[id].toLowerCase()}`}</div>
-      ${picking ? '' : `<div class="small muted">So far: ${num(sum.kcal)} kcal, ${num(sum.protein)} g protein</div>`}
+      ${picking ? '' : `<div class="small muted">${c.key === c.today ? '' : `${longDate(c.key)}. `}So far: ${num(sum.kcal)} kcal, ${num(sum.protein)} g protein</div>`}
     </div>
     <input class="search" type="search" placeholder="Search your foods" aria-label="Search your foods" value="${esc(ui.food.search)}" data-search>
     <div class="seg n${tabs.length}" role="group" aria-label="Which list">
@@ -211,9 +220,28 @@ export function foodBody() {
   if (ui.food.recipe && !ui.food.picking) return recipeScreen(c);
   if (ui.food.adding || ui.food.picking) return addScreen(c);
   const eaten = rules.totals(c.day.food ?? []);
-  return leftToday(c, eaten) + Object.keys(MEALS).map((id) => mealCard(c, id)).join('') +
+  return dayNav(c) + leftToday(c, eaten) + Object.keys(MEALS).map((id) => mealCard(c, id)).join('') +
     `<div class="row total"><span>Total</span><span>${num(eaten.kcal)} kcal, ${num(eaten.protein)} g protein</span></div>`;
 }
+
+// Step back to an earlier day and forward again, never past today.
+function dayNav(c) {
+  const past = c.key !== c.today;
+  return `
+    <div class="day-nav">
+      <button type="button" class="btn compact narrow" data-act="food-day" data-dir="-1" aria-label="The day before">&lsaquo;</button>
+      <b>${past ? longDate(c.key) : 'Today'}</b>
+      <button type="button" class="btn compact narrow" data-act="food-day" data-dir="1" aria-label="The day after" ${past ? '' : 'disabled'}>&rsaquo;</button>
+    </div>
+    ${past ? '<div class="note warn"><b>An earlier day</b>Anything you add or change here goes on this day, not today. <button type="button" class="link" data-act="food-today">Back to today</button></div>' : ''}`;
+}
+actions['food-day'] = (el) => {
+  const c = ctx();
+  const next = rules.addDays(c.key, Number(el.dataset.dir));
+  ui.food.day = next >= c.today ? null : next;
+  app.redraw();
+};
+actions['food-today'] = () => { ui.food.day = null; app.redraw(); };
 
 actions['open-add'] = (el) => {
   ui.food = { ...ui.food, meal: el.dataset.meal, adding: true, search: '' };
@@ -354,6 +382,11 @@ actions['add-meal'] = (el) => {
 // Your own foods are checked first, so a product you have saved is found without the internet.
 
 let reader = null; // the running scanner, so it can be stopped
+let stream = null; // the camera, when the phone's own barcode reader is used
+const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
+const SCAN_EVERY_MS = 80; // how often the phone's own reader checks a frame
+// The back camera, at a size where the bars are sharp but each frame is still quick to read.
+const CAMERA = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
 let zxing = null; // the scanner library, loaded the first time it is needed
 const loadScanner = () => (zxing ??= new Promise((ok, fail) => {
   const s = Object.assign(document.createElement('script'), { src: 'vendor/zxing.min.js', onload: ok, onerror: () => { zxing = null; fail(); } });
@@ -362,6 +395,8 @@ const loadScanner = () => (zxing ??= new Promise((ok, fail) => {
 function stopCamera() {
   try { reader?.reset(); } catch { /* already stopped */ }
   reader = null;
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null;
 }
 sheet.addEventListener('close', stopCamera);
 
@@ -370,6 +405,34 @@ async function startCamera() {
   const say = (text) => { const el = sheet.querySelector('[data-scan-msg]'); if (el) el.textContent = text; };
   const typeIt = 'Type the number under the barcode instead.';
   if (!navigator.mediaDevices?.getUserMedia) return say(`This browser cannot use the camera here. ${typeIt}`);
+  const video = sheet.querySelector('[data-scan-video]');
+  const found = (code) => {
+    if (!form.isConnected) return;
+    stopCamera();
+    form.querySelector('[name="code"]').value = code;
+    form.requestSubmit();
+  };
+  // Some phones can read barcodes themselves, which is quicker than any library. Use that when it is there.
+  if ('BarcodeDetector' in window) {
+    try {
+      const detector = new window.BarcodeDetector({ formats: FORMATS });
+      stream = await navigator.mediaDevices.getUserMedia(CAMERA);
+      if (!form.isConnected) return stopCamera();
+      video.srcObject = stream;
+      await video.play();
+      say('Hold the barcode inside the frame.');
+      const mine = stream;
+      const look = async () => {
+        if (stream !== mine) return; // stopped, or the sheet was closed
+        const codes = await detector.detect(video).catch(() => []);
+        if (codes[0]?.rawValue) return found(codes[0].rawValue);
+        setTimeout(look, SCAN_EVERY_MS);
+      };
+      return look();
+    } catch {
+      stopCamera(); // fall through to the library
+    }
+  }
   try {
     await loadScanner();
   } catch {
@@ -377,16 +440,14 @@ async function startCamera() {
   }
   if (!form.isConnected) return;
   const Z = window.ZXing;
-  const hints = new Map([[Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]]]);
-  reader = new Z.BrowserMultiFormatReader(hints);
+  const hints = new Map([
+    [Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]],
+    [Z.DecodeHintType.TRY_HARDER, true], // also reads a barcode that is tilted or a little blurred
+  ]);
+  reader = new Z.BrowserMultiFormatReader(hints); // it already tries again the moment a frame has no barcode
   try {
-    await reader.decodeFromConstraints({ video: { facingMode: 'environment' } }, sheet.querySelector('[data-scan-video]'), (result) => {
-      if (!result || !form.isConnected) return;
-      stopCamera();
-      form.querySelector('[name="code"]').value = result.getText();
-      form.requestSubmit();
-    });
-    say('Point the camera at the barcode.');
+    await reader.decodeFromConstraints(CAMERA, video, (result) => { if (result) found(result.getText()); });
+    say('Hold the barcode inside the frame.');
   } catch {
     stopCamera();
     say(`The camera is blocked or missing. ${typeIt}`);
@@ -400,7 +461,8 @@ actions.scan = () => {
         <div class="card-title">Scan a barcode</div>
         <div class="muted" style="font-size:14px">For packaged food. The numbers come from Open Food Facts, a free list filled in by volunteers, so check them against the label the first time.</div>
       </div>
-      <video class="scan-video" playsinline muted data-scan-video></video>
+      <div class="scan-box"><video class="scan-video" playsinline muted data-scan-video></video><i></i></div>
+      <div class="small muted">Fill the frame with the barcode, bars upright, about a hand's width away. Good light helps most.</div>
       <div class="small muted" data-scan-msg>Starting the camera.</div>
       <label class="field"><span>Or type the number</span>
         <input name="code" type="text" inputmode="numeric" autocomplete="off" maxlength="14">
