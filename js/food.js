@@ -10,6 +10,7 @@ import * as store from './store.js';
 import { ui, ctx } from './state.js';
 import { sheet, esc, num, shortDate, actions, forms, app, openSheet, field, readNumber } from './ui.js';
 import * as lookup from './lookup.js';
+import { foods as preloaded } from './foods.js';
 
 const MEALS = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snacks', dinner: 'Dinner' };
 const LISTS = { recent: 'Recent', mine: 'My foods', meals: 'Meals', recipes: 'Recipes' };
@@ -410,7 +411,6 @@ actions.scan = () => {
   startCamera();
 };
 
-let prefill = null; // a name and barcode waiting for the New food form
 
 forms.barcode = async (fd, form) => {
   const c = ctx();
@@ -429,14 +429,75 @@ forms.barcode = async (fd, form) => {
     }
     // Not on the list, or listed without calories: the numbers come from the label instead.
     if (!f || f.kcal === null) {
-      prefill = { name: f && !f.name.startsWith('Product ') ? f.name : '', barcode: code };
-      setTimeout(() => actions['edit-food']({ dataset: {} }), 0);
+      const name = f && !f.name.startsWith('Product ') ? f.name : '';
+      setTimeout(() => openLabel(name, code), 0);
       return;
     }
     store.setFood(f.id, f);
   }
   const food = f;
   setTimeout(() => { ui.food.pick = { id: food.id, unit: unitsOf(food)[0], amount: startAmount(food, unitsOf(food)[0]) }; openPick(); }, 0);
+};
+
+// ----- A scanned product that is not on the list: copy the label -----
+// The boxes follow the order of a nutrition label, top to bottom, so it is read once and typed once.
+
+function openLabel(name, code) {
+  const opt = { unit: 'g', required: false };
+  openSheet(`
+    <form class="sheet-body" data-form="label" novalidate>
+      <div>
+        <div class="card-title">Copy the label</div>
+        <div class="muted" style="font-size:14px">This barcode is not on the list with its numbers. Type them from the pack once, in the order the label has them, and the next scan finds it here.</div>
+      </div>
+      <input type="hidden" name="barcode" value="${esc(code)}">
+      ${textField('name', 'Name', name)}
+      ${field('per', 'The numbers are for', 100, { unit: 'g', hint: 'Most labels say per 100 g. If yours only says per serving, type the serving weight.' })}
+      <div class="field-grid">
+        ${field('energy', 'Energy', '')}
+        <label class="field"><span>Energy is in</span>
+          <select name="energyUnit"><option value="kcal">kcal</option><option value="kj">kJ</option></select>
+        </label>
+        ${field('fat', 'Total fat', '', { unit: 'g' })}
+        ${field('satFat', 'Saturated fat', '', opt)}
+        ${field('carbs', 'Carbohydrate', '', { unit: 'g' })}
+        ${field('sugar', 'Sugars', '', opt)}
+        ${field('fibre', 'Fibre', '', opt)}
+        ${field('protein', 'Protein', '', { unit: 'g' })}
+        ${field('salt', 'Salt', '', opt)}
+        ${field('amount', 'You usually eat', '', opt)}
+      </div>
+      <div class="small muted">Saturated fat, sugars, fibre and salt can be left empty. If the label gives sodium in mg, leave salt empty.</div>
+      <button class="btn primary">Save and add</button>
+      <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
+    </form>`);
+}
+
+forms.label = (fd, form) => {
+  const name = String(fd.get('name')).trim();
+  const n = Object.fromEntries(['per', 'energy', 'fat', 'satFat', 'carbs', 'sugar', 'fibre', 'protein', 'salt', 'amount'].map((k) => [k, readNumber(fd, k)]));
+  if (!name) return 'Give it a name.';
+  if (!n.per || n.per > 2000) return 'Say how many grams the label numbers are for. It is usually 100.';
+  if (!n.energy || [n.fat, n.carbs, n.protein].includes(null)) return 'Energy, total fat, carbohydrate and protein all need a number. Use 0 if there is none.';
+  const kcal = Math.round(fd.get('energyUnit') === 'kj' ? n.energy / 4.184 : n.energy);
+  if (kcal > MAX_KCAL || Math.max(n.fat, n.carbs, n.protein) > n.per) return 'One of those numbers is too big for that weight. Check for a slip.';
+  // Calories far from what the macros add up to usually mean a slip, or kJ typed as kcal.
+  const fromMacros = n.protein * 4 + n.carbs * 4 + n.fat * 9;
+  if (kcal > 50 && (fromMacros > kcal * 1.6 || fromMacros < kcal * 0.5) && form.dataset.warned !== String(fromMacros)) {
+    form.dataset.warned = String(fromMacros);
+    return `Those numbers add up to about ${Math.round(fromMacros)} kcal, but the energy comes to ${kcal} kcal. Check whether the label says kJ. If it is right, tap Save and add again.`;
+  }
+  const id = `my-${newId()}`;
+  const extra = Object.fromEntries(['sugar', 'satFat', 'salt'].filter((k) => n[k] !== null).map((k) => [k, n[k]]));
+  const food = {
+    id, name, serving: `${n.per} g`, byGrams: true, grams: n.per, amount: n.amount && n.amount <= MAX_AMOUNT ? n.amount : n.per,
+    kcal, protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre, source: 'own',
+    ...(Object.keys(extra).length ? { extra } : {}),
+  };
+  const barcode = String(fd.get('barcode') ?? '');
+  if (lookup.isBarcode(barcode)) food.barcode = barcode;
+  store.setFood(id, food);
+  setTimeout(() => { ui.food.pick = { id, unit: 'g', amount: food.amount }; openPick(); }, 0);
 };
 
 // ----- Quick add: calories typed straight in -----
@@ -518,14 +579,12 @@ const textField = (name, label, value, hint = '') => `
 actions['edit-food'] = (el) => {
   const f = ctx().foods.find((x) => x.id === el.dataset.id) ?? {};
   if (f.recipe) return openRecipe(f);
-  const from = f.id ? f : prefill ?? {};
-  prefill = null;
+  const from = f;
   openSheet(`
     <form class="sheet-body" data-form="food" data-id="${esc(f.id ?? '')}" novalidate>
       <div class="card-title">${f.id ? 'Edit food' : 'New food'}</div>
       ${from.barcode ? `<input type="hidden" name="barcode" value="${esc(from.barcode)}">` : ''}
-      ${!f.id && from.barcode ? '<div class="note"><b>Not on the list</b>Open Food Facts does not have this one with its numbers. Type them from the label once, and the next scan will find it here.</div>' : ''}
-      ${textField('name', 'Name', f.name ?? (from.name || ui.food.search))}
+      ${textField('name', 'Name', f.name ?? ui.food.search)}
       ${textField('serving', 'One serving is', f.serving, 'For example "1 plate" or "100 g, from the pack".')}
       <div class="field-grid">
         ${field('kcal', 'Calories', f.kcal, { unit: 'kcal' })}
@@ -583,8 +642,8 @@ actions['delete-food'] = (el) => {
   sheet.close();
   ui.food.pick = null;
   ui.food.recipe = null;
-  // A preloaded food cannot be deleted from the code, so it is hidden instead.
-  store.setFood(id, id.startsWith('my-') ? null : { id, hidden: true });
+  // A preloaded food cannot be deleted from the code, so it is hidden instead. Anything else is deleted.
+  store.setFood(id, preloaded.some((f) => f.id === id) ? { id, hidden: true } : null);
 };
 
 // ----- Recipes: a dish built from saved foods -----

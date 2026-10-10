@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.2
+
+- A scanned barcode that is not on the list opens "Copy the label": the boxes follow the order of a nutrition label, energy can be typed in kcal or kJ, and the numbers can be per 100 g or per serving weight.
+
 ## 0.8.1
 
 - A saved food can be removed straight from the sheet it is picked on. Removing asks for a second tap.
