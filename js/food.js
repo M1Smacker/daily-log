@@ -446,39 +446,62 @@ async function startCamera() {
   video.srcObject = stream;
   await video.play().catch(() => {});
   tuneCamera(stream.getVideoTracks()[0]);
-  say('Hold the phone back until the barcode is sharp. It does not need to fill the box.');
+  say('Point the camera at the barcode and hold it back until it is sharp.');
 
-  // Most looks are at the middle band of the picture only, where the box is: less to search, so
-  // it is quicker and cannot pick up some other barcode at the edge. Every third look is at the
-  // whole picture, in case the barcode is held outside the box.
+  // Looks take turns: the middle band of the picture (less to search, so quicker), then the whole
+  // picture (in case the barcode is held off to one side).
   const crop = document.createElement('canvas');
   const pen = crop.getContext('2d', { willReadFrequently: true });
+  const mark = sheet.querySelector('[data-scan-mark]');
+  // Draws the outline around the barcode where it was seen. The picture is cropped to fill its
+  // box (object-fit: cover), so a place in the picture is scaled and shifted the same way.
+  const outline = (box) => {
+    if (!box) { mark.hidden = true; return; }
+    const frame = video.getBoundingClientRect();
+    const scale = Math.max(frame.width / video.videoWidth, frame.height / video.videoHeight);
+    const dx = (frame.width - video.videoWidth * scale) / 2, dy = (frame.height - video.videoHeight * scale) / 2;
+    const pad = 6;
+    Object.assign(mark.style, {
+      left: `${box.x * scale + dx - pad}px`, top: `${box.y * scale + dy - pad}px`,
+      width: `${box.width * scale + pad * 2}px`, height: `${box.height * scale + pad * 2}px`,
+    });
+    mark.hidden = false;
+  };
   let turn = 0;
   let last = null;
   const look = async () => {
     if (stream !== mine) return; // stopped, or the sheet was closed
     let codes = [];
+    let ox = 0, oy = 0; // where the searched part sits in the whole picture
     if (video.videoWidth) {
       try {
-        if (turn++ % 3 === 2) codes = await detector.detect(video);
+        if (turn++ % 2) codes = await detector.detect(video);
         else {
           const w = video.videoWidth, h = video.videoHeight;
           const cw = Math.round(w * 0.8), ch = Math.round(h * 0.4);
+          ox = (w - cw) / 2;
+          oy = (h - ch) / 2;
           crop.width = cw;
           crop.height = ch;
-          pen.drawImage(video, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, cw, ch);
+          pen.drawImage(video, ox, oy, cw, ch, 0, 0, cw, ch);
           codes = await detector.detect(crop);
         }
       } catch { /* a frame that could not be read: try the next one */ }
     }
-    const code = codes.map((x) => x.rawValue).find((v) => lookup.isBarcode(v));
+    const hit = codes.find((x) => lookup.isBarcode(x.rawValue));
+    const code = hit?.rawValue ?? null;
+    const b = hit?.boundingBox;
+    outline(b ? { x: b.x + ox, y: b.y + oy, width: b.width, height: b.height } : null);
     // The same number twice in a row, so one misread frame never becomes a wrong food.
     if (code && code === last && stream === mine && form.isConnected) {
+      mark.classList.add('got');
+      await new Promise((r) => setTimeout(r, 300)); // long enough to see what was read
+      if (stream !== mine || !form.isConnected) return;
       stopCamera();
       form.querySelector('[name="code"]').value = code;
       return form.requestSubmit();
     }
-    last = code ?? null;
+    last = code;
     setTimeout(look, SCAN_EVERY_MS);
   };
   look();
@@ -491,7 +514,7 @@ actions.scan = () => {
         <div class="card-title">Scan a barcode</div>
         <div class="muted" style="font-size:14px">For packaged food. The numbers come from Open Food Facts, a free list filled in by volunteers, so check them against the label the first time.</div>
       </div>
-      <div class="scan-box"><video class="scan-video" playsinline muted data-scan-video></video><i></i></div>
+      <div class="scan-box"><video class="scan-video" playsinline muted data-scan-video></video><i data-scan-mark hidden></i></div>
       <div class="small muted" data-scan-msg>Starting the camera.</div>
       <label class="field"><span>Or type the number</span>
         <input name="code" type="text" inputmode="numeric" autocomplete="off" maxlength="14">

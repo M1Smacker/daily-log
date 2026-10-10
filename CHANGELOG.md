@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1
+
+- Barcode scanner: the fixed box is gone. An outline now forms around the barcode where the camera sees it, and turns lime when it has been read.
+
 ## 0.10.0
 
 - Photograph a nutrition label and the Copy the label form fills itself in, for you to check before saving. It needs a free Google AI key in Settings, and sends the photo of the label to Google. Reachable after a barcode that is not found, and from New food.
