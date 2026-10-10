@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+- Barcode scanner replaced with ZXing-C++ (WebAssembly), which reads small, tilted and blurred barcodes far better than the old one. It works at full HD, looks mainly at the middle of the picture, zooms in where the phone allows, and accepts a number only when two looks in a row agree.
+- The aim box is smaller: hold the phone back so the barcode stays in focus.
+- Fixed: the "Or type the number" box could not be typed in until Look it up had been tapped.
+
 ## 0.9.0
 
 - The Food screen can step back to earlier days, to add or fix a meal that was missed. Leaving the tab returns it to today.

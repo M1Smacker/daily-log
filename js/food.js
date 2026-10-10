@@ -381,77 +381,107 @@ actions['add-meal'] = (el) => {
 // ----- Barcodes: the camera, or the number typed in -----
 // Your own foods are checked first, so a product you have saved is found without the internet.
 
-let reader = null; // the running scanner, so it can be stopped
-let stream = null; // the camera, when the phone's own barcode reader is used
+let stream = null; // the running camera, so it can be stopped
+let scanner = null; // the barcode reader, made the first time it is needed
 const FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e'];
-const SCAN_EVERY_MS = 80; // how often the phone's own reader checks a frame
-// The back camera, at a size where the bars are sharp but each frame is still quick to read.
-const CAMERA = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } } };
-let zxing = null; // the scanner library, loaded the first time it is needed
-const loadScanner = () => (zxing ??= new Promise((ok, fail) => {
-  const s = Object.assign(document.createElement('script'), { src: 'vendor/zxing.min.js', onload: ok, onerror: () => { zxing = null; fail(); } });
-  document.head.append(s);
-}));
+const SCAN_EVERY_MS = 60; // a pause between looks, so taps and typing are never held up
+// The back camera at full HD. A barcode can then be read from far enough away to stay in focus.
+const CAMERA = { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } };
+
+const loadScript = (src) => new Promise((ok, fail) => {
+  document.head.append(Object.assign(document.createElement('script'), { src, onload: ok, onerror: fail }));
+});
+// The phone's own reader when it has one. Otherwise ZXing-C++, compiled to run in the browser:
+// the same engine behind most scanner apps, kept inside this app (vendor/).
+async function makeScanner() {
+  if ('BarcodeDetector' in window) {
+    try {
+      const can = await window.BarcodeDetector.getSupportedFormats();
+      if (FORMATS.every((f) => can.includes(f))) return new window.BarcodeDetector({ formats: FORMATS });
+    } catch { /* use the built-in one below */ }
+  }
+  await loadScript('vendor/barcode-detector.js');
+  const api = window.BarcodeDetectionAPI;
+  const wasm = new URL('vendor/zxing_reader.wasm', document.baseURI).href;
+  api.prepareZXingModule({ overrides: { locateFile: (path, prefix) => (path.endsWith('.wasm') ? wasm : prefix + path) } });
+  return new api.BarcodeDetector({ formats: FORMATS });
+}
+const getScanner = () => (scanner ??= makeScanner().catch((e) => { scanner = null; throw e; }));
+
 function stopCamera() {
-  try { reader?.reset(); } catch { /* already stopped */ }
-  reader = null;
   stream?.getTracks().forEach((t) => t.stop());
   stream = null;
 }
 sheet.addEventListener('close', stopCamera);
 
+// Zoom in a little and keep refocusing, on phones that let a web page ask. Holding the phone
+// further back is what keeps a small barcode sharp.
+function tuneCamera(track) {
+  const caps = track.getCapabilities?.() ?? {};
+  const want = {};
+  if (caps.zoom?.max >= 2) want.zoom = Math.max(caps.zoom.min ?? 1, 2);
+  if (caps.focusMode?.includes?.('continuous')) want.focusMode = 'continuous';
+  if (Object.keys(want).length) track.applyConstraints({ advanced: [want] }).catch(() => {});
+}
+
 async function startCamera() {
   const form = sheet.querySelector('[data-form="barcode"]');
+  const video = sheet.querySelector('[data-scan-video]');
   const say = (text) => { const el = sheet.querySelector('[data-scan-msg]'); if (el) el.textContent = text; };
   const typeIt = 'Type the number under the barcode instead.';
   if (!navigator.mediaDevices?.getUserMedia) return say(`This browser cannot use the camera here. ${typeIt}`);
-  const video = sheet.querySelector('[data-scan-video]');
-  const found = (code) => {
-    if (!form.isConnected) return;
-    stopCamera();
-    form.querySelector('[name="code"]').value = code;
-    form.requestSubmit();
-  };
-  // Some phones can read barcodes themselves, which is quicker than any library. Use that when it is there.
-  if ('BarcodeDetector' in window) {
-    try {
-      const detector = new window.BarcodeDetector({ formats: FORMATS });
-      stream = await navigator.mediaDevices.getUserMedia(CAMERA);
-      if (!form.isConnected) return stopCamera();
-      video.srcObject = stream;
-      await video.play();
-      say('Hold the barcode inside the frame.');
-      const mine = stream;
-      const look = async () => {
-        if (stream !== mine) return; // stopped, or the sheet was closed
-        const codes = await detector.detect(video).catch(() => []);
-        if (codes[0]?.rawValue) return found(codes[0].rawValue);
-        setTimeout(look, SCAN_EVERY_MS);
-      };
-      return look();
-    } catch {
-      stopCamera(); // fall through to the library
-    }
-  }
+  let detector;
   try {
-    await loadScanner();
+    detector = await getScanner();
   } catch {
     return say(`The scanner could not load. ${typeIt}`);
   }
-  if (!form.isConnected) return;
-  const Z = window.ZXing;
-  const hints = new Map([
-    [Z.DecodeHintType.POSSIBLE_FORMATS, [Z.BarcodeFormat.EAN_13, Z.BarcodeFormat.EAN_8, Z.BarcodeFormat.UPC_A, Z.BarcodeFormat.UPC_E]],
-    [Z.DecodeHintType.TRY_HARDER, true], // also reads a barcode that is tilted or a little blurred
-  ]);
-  reader = new Z.BrowserMultiFormatReader(hints); // it already tries again the moment a frame has no barcode
   try {
-    await reader.decodeFromConstraints(CAMERA, video, (result) => { if (result) found(result.getText()); });
-    say('Hold the barcode inside the frame.');
+    stream = await navigator.mediaDevices.getUserMedia(CAMERA);
   } catch {
-    stopCamera();
-    say(`The camera is blocked or missing. ${typeIt}`);
+    return say(`The camera is blocked or missing. ${typeIt}`);
   }
+  if (!form.isConnected || !sheet.open) return stopCamera();
+  const mine = stream;
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  tuneCamera(stream.getVideoTracks()[0]);
+  say('Hold the phone back until the barcode is sharp. It does not need to fill the box.');
+
+  // Most looks are at the middle band of the picture only, where the box is: less to search, so
+  // it is quicker and cannot pick up some other barcode at the edge. Every third look is at the
+  // whole picture, in case the barcode is held outside the box.
+  const crop = document.createElement('canvas');
+  const pen = crop.getContext('2d', { willReadFrequently: true });
+  let turn = 0;
+  let last = null;
+  const look = async () => {
+    if (stream !== mine) return; // stopped, or the sheet was closed
+    let codes = [];
+    if (video.videoWidth) {
+      try {
+        if (turn++ % 3 === 2) codes = await detector.detect(video);
+        else {
+          const w = video.videoWidth, h = video.videoHeight;
+          const cw = Math.round(w * 0.8), ch = Math.round(h * 0.4);
+          crop.width = cw;
+          crop.height = ch;
+          pen.drawImage(video, (w - cw) / 2, (h - ch) / 2, cw, ch, 0, 0, cw, ch);
+          codes = await detector.detect(crop);
+        }
+      } catch { /* a frame that could not be read: try the next one */ }
+    }
+    const code = codes.map((x) => x.rawValue).find((v) => lookup.isBarcode(v));
+    // The same number twice in a row, so one misread frame never becomes a wrong food.
+    if (code && code === last && stream === mine && form.isConnected) {
+      stopCamera();
+      form.querySelector('[name="code"]').value = code;
+      return form.requestSubmit();
+    }
+    last = code ?? null;
+    setTimeout(look, SCAN_EVERY_MS);
+  };
+  look();
 }
 
 actions.scan = () => {
@@ -462,7 +492,6 @@ actions.scan = () => {
         <div class="muted" style="font-size:14px">For packaged food. The numbers come from Open Food Facts, a free list filled in by volunteers, so check them against the label the first time.</div>
       </div>
       <div class="scan-box"><video class="scan-video" playsinline muted data-scan-video></video><i></i></div>
-      <div class="small muted">Fill the frame with the barcode, bars upright, about a hand's width away. Good light helps most.</div>
       <div class="small muted" data-scan-msg>Starting the camera.</div>
       <label class="field"><span>Or type the number</span>
         <input name="code" type="text" inputmode="numeric" autocomplete="off" maxlength="14">
@@ -470,6 +499,10 @@ actions.scan = () => {
       <button class="btn primary">Look it up</button>
       <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
     </form>`);
+  // Opening a sheet puts the cursor in its first box. Here that is the number box, and the camera
+  // starting up hides the keyboard again, which leaves an iPhone with a box that looks empty but
+  // already has the cursor, so tapping it does nothing. Take the cursor out, and a tap works.
+  document.activeElement?.blur();
   startCamera();
 };
 

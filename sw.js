@@ -4,7 +4,7 @@
 // To release a change: bump VERSION here and in js/version.js. The app then shows
 // "Update available" and switches over when Refresh is tapped.
 
-const VERSION = '0.9.0';
+const VERSION = '0.9.1';
 const CACHE = `daily-log-${VERSION}`;
 const SDK_CACHE = 'firebase-sdk'; // versioned by its own URLs, so it survives app updates
 
@@ -39,7 +39,8 @@ const SHELL = [
   'icons/icon-192.png',
   'icons/icon-512.png',
   'icons/apple-touch-icon.png',
-  'vendor/zxing.min.js',
+  'vendor/barcode-detector.js',
+  'vendor/zxing_reader.wasm',
 ];
 
 self.addEventListener('install', (e) => {
