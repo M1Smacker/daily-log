@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Email and password sign-in, for iPhones, where the Google sign-in window does not work for this app. A password is added to the same account from Settings.
+
 ## 0.3.0
 
 - Connected to the Firebase project. The app now asks for a Google login and keeps data in the private database.

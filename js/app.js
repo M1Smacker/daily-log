@@ -82,7 +82,19 @@ function render(nav = true) {
       ? '<div class="muted" style="font-size:16px">Loading your data.</div>'
       : `<div class="muted" style="font-size:16px">Your data is private to your own account. Sign in to open it.</div>
          ${acc.error ? `<div class="form-error" role="alert">${esc(acc.error)}</div>` : ''}
-         ${acc.error?.startsWith('Could not load') ? '' : '<button type="button" class="btn primary" data-act="sign-in">Sign in with Google</button>'}`;
+         ${acc.error?.startsWith('Could not load') ? '' : `
+           <form class="card" data-form="sign-in" novalidate>
+             <span class="card-title">Sign in</span>
+             <label class="field"><span>Email</span>
+               <input name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+             </label>
+             <label class="field"><span>Password</span>
+               <input name="password" type="password" autocomplete="current-password" required>
+             </label>
+             <button class="btn primary">Sign in</button>
+           </form>
+           <button type="button" class="btn" data-act="sign-in">Sign in with Google</button>
+           <div class="small muted">Google sign-in works on a computer. On an iPhone, use the email and password: set the password once in Settings on a computer.</div>`}`;
     frame(c, 'Daily log', body, { sub: acc.ready ? 'Sign in' : 'One moment', bare: true });
     return;
   }
@@ -132,6 +144,16 @@ function render(nav = true) {
 
 app.redraw = () => render(false);
 actions['sign-in'] = () => store.signIn();
+forms['sign-in'] = async (fd, form) => {
+  const email = String(fd.get('email')).trim();
+  const password = String(fd.get('password'));
+  if (!email || !password) return 'Type your email and your password.';
+  const button = form.querySelector('button');
+  button.disabled = true;
+  const problem = await store.signInEmail(email, password);
+  button.disabled = false;
+  return problem ?? undefined;
+};
 actions['sign-out'] = () => store.signOut();
 
 // Where the data is right now, in plain words. Shown at the bottom of Today.
@@ -161,14 +183,15 @@ document.addEventListener('click', (e) => {
 
 // A form handler returns nothing when it saved, a string to show as a problem,
 // or { done: 'message' } to confirm on a form that stays on screen.
-document.addEventListener('submit', (e) => {
+document.addEventListener('submit', async (e) => {
   const form = e.target.closest('[data-form]');
   if (!form) return;
   e.preventDefault();
-  const result = forms[form.dataset.form]?.(new FormData(form), form);
+  const result = await forms[form.dataset.form]?.(new FormData(form), form);
   if (typeof result === 'string' || result?.done) {
     // Saving redraws the screen, so the message goes on the form that is on screen now.
     const live = form.isConnected ? form : document.querySelector(`[data-form="${form.dataset.form}"]`);
+    if (!live) return; // the screen moved on, so there is nowhere to show it
     let box = live.querySelector('.form-error');
     if (!box) {
       box = Object.assign(document.createElement('div'), { className: 'form-error' });

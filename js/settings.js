@@ -68,6 +68,23 @@ export function settingsBody() {
       : '<div class="muted" style="font-size:14px">No login is set up yet, so everything is saved on this device only. Use the backup file on the Progress screen to keep a copy.</div>'}
     </section>
     <section class="card">
+      <span class="card-title">Phone sign-in</span>
+      ${!store.account.cloud ? '<div class="muted" style="font-size:14px">Needs a login to be set up first.</div>'
+      : store.account.user?.hasPassword
+        ? '<div class="muted" style="font-size:14px">This account has a password. On your phone, sign in with your Google email address and that password.</div>'
+        : `<form class="stack" data-form="add-password" novalidate>
+            <div class="muted" style="font-size:14px">Google sign-in does not work on an iPhone for this app. Set a password here once, then sign in on the phone with your Google email address and this password. It is the same account and the same data.</div>
+            <label class="field"><span>New password</span>
+              <input name="password" type="password" autocomplete="new-password" minlength="10" required>
+              <small>At least 10 characters. Let your browser or phone save it.</small>
+            </label>
+            <label class="field"><span>Same password again</span>
+              <input name="again" type="password" autocomplete="new-password" required>
+            </label>
+            <button class="btn primary">Save password</button>
+          </form>`}
+    </section>
+    <section class="card">
       <span class="card-title">Backups</span>
       <div class="muted" style="font-size:14px">The app keeps one copy of everything per day, for the last ${store.account.cloud ? '14 days' : '3 days on this device'}. If something goes wrong, you can go back to any of them.</div>
       <button type="button" class="btn" data-act="show-backups">Show the automatic backups</button>
@@ -180,4 +197,12 @@ forms.profile = (fd, form) => {
 forms.rollover = (fd) => {
   store.setPlan({ rolloverHour: Number(fd.get('hour')) });
   return { done: 'Saved.' };
+};
+
+forms['add-password'] = async (fd) => {
+  const password = String(fd.get('password'));
+  if (password.length < 10) return 'Use at least 10 characters.';
+  if (password !== String(fd.get('again'))) return 'The two passwords are not the same.';
+  const problem = await store.addPassword(password);
+  return problem ?? undefined;
 };

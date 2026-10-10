@@ -29,7 +29,7 @@ let stop = [];
 // What the screens need to know about login and sync.
 //   cloud    a Firebase config exists
 //   ready    data has loaded (always true on a device-only setup)
-//   user     { uid } when signed in
+//   user     { uid, hasPassword } when signed in. hasPassword: an email and password can be used too
 //   pending  some writes are saved on the phone but not yet on the server
 //   error    a plain message when something went wrong
 export const account = { cloud: Boolean(firebaseConfig), ready: !firebaseConfig, user: null, pending: false, error: null };
@@ -151,7 +151,7 @@ function onUser(user) {
   for (const off of stop) off();
   stop = [];
   data = empty();
-  account.user = user ? { uid: user.uid } : null;
+  account.user = user ? { uid: user.uid, hasPassword: user.providerData.some((p) => p.providerId === 'password') } : null;
   account.pending = false;
   account.ready = !user;
   if (!user) return onChange();
@@ -264,6 +264,39 @@ export async function signIn() {
     onChange();
   }
 }
+// Email and password sign-in. This is the one that works on an iPhone, in Safari and in the
+// home screen app, because it needs no pop-up window. Returns null, or a sentence to show.
+export async function signInEmail(email, password) {
+  account.error = null;
+  try {
+    await fb.a.signInWithEmailAndPassword(fb.auth, email, password);
+    return null;
+  } catch (e) {
+    if (e?.code === 'auth/too-many-requests') return 'Too many tries. Wait a few minutes, then try again.';
+    if (e?.code === 'auth/network-request-failed') return 'No connection. Check the internet and try again.';
+    return 'That email or password is not right.';
+  }
+}
+
+// Adds a password to the account that is signed in, so the same account, with the same data,
+// can also be opened with its email and that password. Returns null, or a sentence to show.
+export async function addPassword(password) {
+  const user = fb.auth.currentUser;
+  if (!user?.email) return 'Sign in with Google first.';
+  try {
+    await fb.a.linkWithCredential(user, fb.a.EmailAuthProvider.credential(user.email, password));
+    account.user = { ...account.user, hasPassword: true };
+    onChange();
+    return null;
+  } catch (e) {
+    if (e?.code === 'auth/provider-already-linked') return 'This account already has a password.';
+    if (e?.code === 'auth/weak-password') return 'That password is too easy to guess. Use a longer one.';
+    if (e?.code === 'auth/requires-recent-login') return 'For safety, sign out, sign in with Google again, then set the password straight away.';
+    if (e?.code === 'auth/operation-not-allowed') return 'Email and password sign-in is not switched on in Firebase yet.';
+    return 'The password could not be saved. Check the internet and try again.';
+  }
+}
+
 // Signing out with unsynced entries could strand them on this phone, so it waits.
 export function signOut() {
   if (account.pending) {

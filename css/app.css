@@ -697,3 +697,4 @@ button:disabled { opacity: 0.35; cursor: default; }
 .entry-nums { flex: none; text-align: right; }
 .total { padding-top: 12px; border-top: 1px solid var(--line-strong); font-weight: 600; }
 
+.stack { display: flex; flex-direction: column; gap: 12px; }
