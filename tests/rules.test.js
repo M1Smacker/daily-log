@@ -331,3 +331,51 @@ test('editEntry: an entry with no amount of its own keeps its numbers', () => {
   const out = r.editEntry(e, 2, { kcal: 200, protein: 10, carbs: 20, fat: 5 }, 'lunch');
   assert.deepEqual([out.kcal, out.protein, out.amount], [200, 10, 2]);
 });
+
+// ----- From the October 2026 audit -----
+
+test('unknownIn: names the nutrients some entry has no number for, so a total can say "at least"', () => {
+  const e = (protein, fat) => ({ kcal: 100, protein, carbs: 10, fat, fibre: null });
+  assert.deepEqual(r.unknownIn([e(10, 5), e(20, 5)]), ['fibre']);
+  assert.deepEqual(r.unknownIn([e(10, 5), e(null, 5)]).sort(), ['fibre', 'protein']);
+  assert.deepEqual(r.unknownIn([]), []);
+});
+
+test('weeks: with a judge, half-logged days and the open day are left out of the food average', () => {
+  const full = [{ meal: 'lunch', kcal: 1000, protein: 60 }, { meal: 'dinner', kcal: 1000, protein: 60 }];
+  const half = [{ meal: 'breakfast', kcal: 300, protein: 10 }];
+  const noProtein = [{ meal: 'lunch', kcal: 1000, protein: null }, { meal: 'dinner', kcal: 1000, protein: 50 }];
+  const days = {
+    '2026-10-15': { food: full }, '2026-10-16': { food: full }, '2026-10-17': { food: half },
+    '2026-10-18': { food: noProtein }, '2026-10-19': { food: half }, // the 19th is "today", still open
+  };
+  const judge = (food) => food.reduce((a, e) => a + e.kcal, 0) >= 1200 && new Set(food.map((e) => e.meal)).size >= 2;
+  const [w] = r.weeks(days, [], '2026-10-19', 4, '2026-10-08', 1, judge);
+  assert.equal(w.foodDays, 3); // two full days and the one with a missing protein number
+  assert.equal(w.kcal, 2000);
+  assert.equal(w.protein, 120); // only from the two days where every protein number is known
+  // Without a judge it counts every day with food, as it always did.
+  assert.equal(r.weeks(days, [], '2026-10-19', 4, '2026-10-08', 1)[0].foodDays, 5);
+});
+
+test('withTargetDate: stamps the day the calorie target changed, and a same-day change back is not a change', () => {
+  const p = (kcal, extra = {}) => ({ startKg: 90, targets: { kcal }, ...extra });
+  assert.equal(r.withTargetDate(null, p(2200), '2026-11-01').targetChangedOn, undefined); // a first profile
+  const changed = r.withTargetDate(p(2200), p(2050), '2026-11-03');
+  assert.deepEqual([changed.targetChangedOn, changed.targetWas], ['2026-11-03', 2200]);
+  // Another field saved later keeps the date.
+  assert.equal(r.withTargetDate(changed, p(2050), '2026-11-09').targetChangedOn, '2026-11-03');
+  // A slip corrected the same day: 2200 to 2050 and straight back.
+  const back = r.withTargetDate(changed, p(2200), '2026-11-03');
+  assert.equal(back.targetChangedOn, undefined);
+  assert.equal(back.targetWas, undefined);
+  // Two changes in one day still remember what the day started at.
+  const twice = r.withTargetDate(changed, p(2000), '2026-11-03');
+  assert.deepEqual([twice.targetChangedOn, twice.targetWas], ['2026-11-03', 2200]);
+});
+
+test('planFrom: a saved dumbbell list is put in order, because the next weight up is found by walking it', () => {
+  const saved = r.planFrom(plan, { dumbbells: [20, 5, 12.5, 10] });
+  assert.deepEqual(saved.dumbbells, [5, 10, 12.5, 20]);
+  assert.equal(r.nextWeight('dumbbell', 10, saved.dumbbells), 12.5);
+});

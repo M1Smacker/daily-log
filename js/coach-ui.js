@@ -52,11 +52,13 @@ export function coachDay(c, key) {
   };
 }
 
-// The open day: only the evening protein reminder.
+// The open day: only the evening protein reminder. The day runs past midnight until the
+// rollover, so 1 am is hour 25 of the day that is still open, not the morning of a new one.
 export function coachToday(c) {
+  const clock = rules.localHour(new Date(), c.plan.utcOffsetHours);
   return coach.dayCheck({
     entries: c.day.food ?? [], kcalTarget: c.targets.kcal, proteinTarget: c.targets.protein,
-    open: true, hour: rules.localHour(new Date(), c.plan.utcOffsetHours),
+    open: true, hour: clock < c.plan.rolloverHour ? clock + 24 : clock,
   });
 }
 

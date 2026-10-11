@@ -8,11 +8,17 @@ import { sessions } from './exercises.js';
 import { logged, asSets } from './workout.js';
 import { esc, num, fmt, shortDate, litres, actions, forms, openSheet, field, readNumber } from './ui.js';
 import { weekCardHtml, coachCodes } from './coach-ui.js';
+import { dayFacts, isJudgeable } from './coach.js';
+import { DAY as COACH_DAY } from './coach-constants.js';
 
 const LIFT_NAMES = Object.fromEntries(Object.values(sessions).flat().map((e) => [e.id, e.name]));
 // A swapped lift's id is the original id, then '~', then the new name in lower case.
 const liftName = (id) => LIFT_NAMES[id] ?? (id.includes('~') ? id.split('~')[1].replace(/-/g, ' ').replace(/^./, (ch) => ch.toUpperCase()) : id);
 const dayKcal = (d) => rules.totals(d.food ?? []);
+// A day's food counts towards an average only when enough was logged to judge it: the same rule
+// the Coach uses, so the numbers on this screen and the Coach's never disagree.
+const countsAsDay = (food) => isJudgeable(dayFacts(food));
+const ENOUGH = `at least ${COACH_DAY.judgeMinKcal.toLocaleString('en-GB')} kcal and ${COACH_DAY.judgeMinMeals} meals`;
 
 // ----- Weight -----
 
@@ -181,7 +187,7 @@ function photosCard(c) {
 
 // One line per plan week, newest first. Plain numbers with no colours: it is a record, not a score.
 function weeksTable(c, days) {
-  const list = rules.weeks(c.data.days, days, c.key, c.plan.weekStartDow, c.plan.start);
+  const list = rules.weeks(c.data.days, days, c.key, c.plan.weekStartDow, c.plan.start, 6, countsAsDay);
   if (!list.length) return '';
   const change = (w) => (w.change === null ? '-' : `${w.change > 0 ? '+' : ''}${w.change} kg`);
   return `
@@ -191,7 +197,7 @@ function weeksTable(c, days) {
       <thead><tr><th scope="col">Week from</th><th scope="col">Kcal</th><th scope="col">Protein</th><th scope="col">Gym</th><th scope="col">Weight</th></tr></thead>
       <tbody>${list.map((w) => `
         <tr>
-          <th scope="row">${w.running ? 'This week' : shortDate(w.first)}<small>food on ${w.foodDays} ${w.foodDays === 1 ? 'day' : 'days'}</small></th>
+          <th scope="row">${w.running ? 'This week' : shortDate(w.first)}<small>${w.foodDays} ${w.foodDays === 1 ? 'day' : 'days'} counted</small></th>
           <td>${w.kcal === null ? '-' : num(w.kcal)}</td>
           <td>${w.protein === null ? '-' : `${num(w.protein)} g`}</td>
           <td>${w.done} of ${w.planned}</td>
@@ -199,17 +205,20 @@ function weeksTable(c, days) {
         </tr>`).join('')}
       </tbody>
     </table>
-    <div class="small muted">Weeks run ${fmt(list[0].first, { weekday: 'long' })} to ${fmt(list[0].last, { weekday: 'long' })}. Kcal and protein are a day's average over the days you logged food, against targets of ${num(c.targets.kcal)} kcal and ${num(c.targets.protein)} g. Weight is how far your 7-day average moved in the week.</div>`;
+    <div class="small muted">Weeks run ${fmt(list[0].first, { weekday: 'long' })} to ${fmt(list[0].last, { weekday: 'long' })}. Kcal and protein are a day's average over the finished days with enough logged to count (${ENOUGH}), against targets of ${num(c.targets.kcal)} kcal and ${num(c.targets.protein)} g. Weight is how far your 7-day average moved in the week.</div>`;
 }
 
 function weekCard(c, days) {
   const last7 = [0, 1, 2, 3, 4, 5, 6].map((i) => c.data.days[rules.addDays(c.key, -i)] ?? {});
-  const fed = last7.filter((d) => d.food?.length);
+  // Food is averaged over the seven finished days before today, and only the ones with enough
+  // logged: today is still being eaten, and a half-logged day would drag the average down.
+  const fed = [1, 2, 3, 4, 5, 6, 7].map((i) => c.data.days[rules.addDays(c.key, -i)] ?? {}).filter((d) => d.food?.length && countsAsDay(d.food));
+  const withProtein = fed.filter((d) => !rules.unknownIn(d.food).includes('protein'));
   const avg = (list, f) => (list.length ? list.reduce((a, d) => a + f(d), 0) / list.length : null);
   const walked = last7.filter((d) => d.steps != null);
   const cell = (value, label) => `<div><div class="big">${value}</div><div class="small muted">${label}</div></div>`;
   const kcal = avg(fed, (d) => dayKcal(d).kcal);
-  const protein = avg(fed, (d) => dayKcal(d).protein);
+  const protein = avg(withProtein, (d) => dayKcal(d).protein);
   const steps = avg(walked, (d) => d.steps);
   return `
     <section class="card">
@@ -220,8 +229,7 @@ function weekCard(c, days) {
         ${cell(steps === null ? '-' : num(steps), 'steps')}
         ${cell(last7.filter((d) => d.session?.type === 'done' || d.session?.type === 'min').length, 'sessions')}
       </div>
-      <div class="small muted">Averages over the days you logged: food on ${fed.length} of 7, steps on ${walked.length} of 7.</div>
-      ${fed.length >= 4 && kcal < rules.KCAL_FLOOR ? `<div class="note warn"><b>Eating very little</b>Your logged average is under ${num(rules.KCAL_FLOOR)} kcal a day. If the log is complete, that is too low and costs muscle and focus. Eat at your target.</div>` : ''}
+      <div class="small muted">Food is averaged over the finished days with enough logged (${ENOUGH}): ${fed.length} of the last 7. Steps were logged on ${walked.length} of 7.</div>
       ${weeksTable(c, days)}
     </section>`;
 }
@@ -334,7 +342,7 @@ export function claudeText(c) {
     'Keep a weight until every set hits the top of the rep range, then make the smallest jump. A missed session stays next in line.',
     `Never go below ${rules.KCAL_FLOOR} kcal. If the average is flat for two weeks and the waist is too, cut ${rules.STALL_CUT_KCAL} kcal or add ${rules.STALL_ADD_STEPS} steps.`,
     '',
-    'Last 14 days (date, weight kg, kcal, protein g, carbs g, fat g, steps, water L, session):',
+    'Last 14 days (date, weight kg, kcal, protein g, carbs g, fat g, steps, water L, session). A + after a number means some foods that day had no figure for it, so the real number is at least that:',
   ];
   for (let i = 13; i >= 0; i--) {
     const k = rules.addDays(c.key, -i);
@@ -342,13 +350,15 @@ export function claudeText(c) {
     if (!d) continue;
     const m = dayKcal(d);
     const ate = d.food?.length;
-    lines.push([k, d.weightKg ?? '-', ate ? m.kcal : '-', ate ? m.protein : '-', ate ? m.carbs : '-', ate ? m.fat : '-',
+    const gaps = ate ? rules.unknownIn(d.food) : [];
+    const shown = (name) => (ate ? `${m[name]}${gaps.includes(name) ? '+' : ''}` : '-');
+    lines.push([k, d.weightKg ?? '-', shown('kcal'), shown('protein'), shown('carbs'), shown('fat'),
       d.steps ?? '-', d.waterMl != null ? litres(d.waterMl) : '-',
       d.session ? `${d.workout?.session ?? ''} ${d.session.type}${d.session.reason ? ` (${d.session.reason})` : ''}`.trim() : '-'].join(', '));
   }
-  const weeks = rules.weeks(c.data.days, rules.schedule(c.plan, c.log, c.key), c.key, c.plan.weekStartDow, c.plan.start);
+  const weeks = rules.weeks(c.data.days, rules.schedule(c.plan, c.log, c.key), c.key, c.plan.weekStartDow, c.plan.start, 6, countsAsDay);
   if (weeks.length) {
-    lines.push('', 'Week by week, newest first (week starting, days food was logged, average kcal and protein g over those days, sessions done of planned, 7-day average weight kg at the end of the week, change in kg from a week earlier):');
+    lines.push('', `Week by week, newest first (week starting, finished days with enough food logged to count (${ENOUGH}), average kcal and protein g over those days, sessions done of planned, 7-day average weight kg at the end of the week, change in kg from a week earlier):`);
     for (const w of weeks) {
       lines.push([`${w.first}${w.running ? ' (this week so far)' : ''}`, w.foodDays, w.kcal ?? '-', w.protein ?? '-',
         `${w.done} of ${w.planned}`, w.weight ?? '-', w.change ?? '-'].join(', '));

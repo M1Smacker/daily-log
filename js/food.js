@@ -55,6 +55,15 @@ const entryFrom = (f, amount, unit, mealId) => ({
 
 // ----- Today: what is left, then the four meals -----
 
+// A total is only what is known. When a logged food has no number for something, say so, so
+// "left" is not read as exact.
+function partial(entries) {
+  const gaps = rules.unknownIn(entries).filter((m) => ['protein', 'carbs', 'fat'].includes(m));
+  if (!gaps.length) return '';
+  const names = gaps.length === 1 ? gaps[0] : `${gaps.slice(0, -1).join(', ')} or ${gaps.at(-1)}`;
+  return `<div class="small muted">Some foods have no number for ${names}, so you have eaten at least what is counted here, and a little less is left.</div>`;
+}
+
 function leftToday(c, eaten) {
   const t = c.targets;
   const cell = (value, unit, label, cls = '') => {
@@ -70,6 +79,7 @@ function leftToday(c, eaten) {
         ${cell(t.carbs - eaten.carbs, ' g', 'carbs')}
         ${cell(t.fat - eaten.fat, ' g', 'fat')}
       </div>
+      ${partial(c.day.food ?? [])}
       <a class="link" href="#guide">Not sure what to eat? Sample days and swaps</a>
     </section>`;
 }
@@ -89,7 +99,8 @@ function mealCard(c, id) {
     <section class="meal-sec">
       <div class="meal-top">
         <h2>${MEALS[id]}</h2><i></i>
-        ${list.length ? `<span><b>${num(sum.kcal)}</b> kcal, ${num(sum.protein)} g protein</span>` : ''}
+        ${list.length ? `<span><b>${num(sum.kcal)}</b> kcal, ${list.every((e) => e.protein == null) ? 'protein not known'
+          : `${rules.unknownIn(list).includes('protein') ? 'at least ' : ''}${num(sum.protein)} g protein`}</span>` : ''}
       </div>
       ${list.map(entryRow).join('')}
       <button type="button" class="add-row" data-act="open-add" data-meal="${id}"><span aria-hidden="true">+</span>Add to ${MEALS[id].toLowerCase()}</button>

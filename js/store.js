@@ -12,6 +12,7 @@
 //   (backups)          users/{uid}/backups/{day}  one whole-app copy a day, the last 14 kept
 
 import { firebaseConfig } from './firebase-config.js';
+import { isDay } from './rules.js';
 
 const KEY = 'daily-log';
 const VERSION = 1;
@@ -55,7 +56,8 @@ function tidyDay(day) {
   if (d.cardio === undefined) delete d.cardio;
   return d;
 }
-const isKey = (k) => /^\d{4}-\d{2}-\d{2}$/.test(k);
+// A day key has to be a real calendar day. '2026-13-45' looks like one, and date sums on it throw.
+const isKey = (k) => isDay(k);
 export function tidy(all) {
   const days = {};
   for (const [k, d] of Object.entries(all.days && typeof all.days === 'object' ? all.days : {})) if (isKey(k)) days[k] = tidyDay(d);

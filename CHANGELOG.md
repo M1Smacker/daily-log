@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.14.1
+
+An audit of the Coach and the rest of the app. Every fix below has a test that failed before it and passes now.
+
+The Coach, lifts:
+
+- It no longer says "if every set gets to the top, the weight goes up" when the next step up is a big one and the jump rule really wants a few more reps. It now names the exact number, taken from the jump rule itself.
+- "Every planned set got there" replaces "every set", because an extra tired set does not count against you.
+- A heavy first set is talked about as that set ("set 1 at 17.5 kg was too heavy"), and it never tells you to go lighter than the weight most of your sets used.
+- A deload is not judged. Fewer reps at the same weight is the point of it.
+- "This lift has gone down two sessions in a row" waits until all the planned sets of today's lift are in. After one set it always looked like a drop.
+- Only light sets before the work are warm-ups. A lighter set after a heavy one is real work and is counted.
+
+The jump rule:
+
+- One or two reps with a weight that was far too heavy no longer counts as "done". A heavier set counts only if it reached the bottom of the rep range.
+
+The Coach, days and weeks:
+
+- The week verdict never quotes a food average from too few days, and can no longer say "0 kcal from 0 days".
+- The weight line only names a pace (on pace, slow, flat) when there are three usable weeks behind it.
+- When two quiet periods overlap (the first fortnight and starting creatine), the date given is when the later one clears, and it says it still needs your weigh-ins.
+- "Give it time" after a target change names the real day the verdict comes back.
+- After raising your target for "too fast", it does not ask for another 150 kcal the next week. The stall choice now says to give it 2 weeks.
+- An old waist reading is no longer used to call a flat scale "recomposing".
+- A calorie target set under 1,800 is never something the Coach tells you to aim for. It measures against 1,800 and says the target is too low.
+- The evening protein reminder also works after midnight, before the day rolls over.
+- The note about lifts with no sets stays quiet until the recap has something in it.
+- Changing your calorie target and putting it straight back the same day is not counted as a change.
+
+The rest of the app:
+
+- A total no longer shows a missing number as zero. Today, the Food screen and a meal's heading say "at least" or "not known" when a logged food has no figure for protein, carbs or fat. The copied text for Claude marks those with a +.
+- The averages on Progress count the same days the Coach does: finished days with enough logged. A half-logged day, or today, no longer drags them down.
+- The old "Eating very little" warning is gone. It used half-logged days and could disagree with the Coach, which covers it properly.
+- Damaged data cannot crash a screen: a day that is not a real date, text where a number belongs in a set, a broken food list, or a broken target date are left out.
+- A saved dumbbell list is always put in order.
+
 ## 0.14.0
 
 The Coach. It checks what you did against your plan, so you do not have to ask anyone. Fixed rules from your plan, worked out on the phone: no AI, no internet, no new data stored, and it only reads what you logged.

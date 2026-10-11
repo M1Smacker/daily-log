@@ -180,9 +180,11 @@ function nextSession(c, days, run) {
 
 function calories(c, eaten) {
   const t = c.targets;
+  // A food with no number for a macro leaves the total short: say "at least", never a made-up exact.
+  const gaps = rules.unknownIn(c.day.food ?? []);
   const macro = (name, m) => `
     <div class="macro">
-      <div class="row"><span>${name}</span><span class="muted"><b>${num(eaten[m])}</b> of ${num(t[m])} g</span></div>
+      <div class="row"><span>${name}</span><span class="muted">${gaps.includes(m) && !(eaten[m] > 0) ? `not known yet, of ${num(t[m])} g` : `${gaps.includes(m) ? 'at least ' : ''}<b>${num(eaten[m])}</b> of ${num(t[m])} g`}</span></div>
       <div class="bar ${m}">${fill(m, eaten[m], t[m])}</div>
     </div>`;
   const gap = rules.biggestGap(t, eaten);

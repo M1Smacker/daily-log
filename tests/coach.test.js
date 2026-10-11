@@ -40,15 +40,17 @@ test('L1: 16 reps on an 8 to 12 dumbbell lift is well above the range, and the j
   assert.equal(out[0].n.next, 17.5); // 16 is not on the list, so the next one up is 17.5
   assert.equal(out[0].n.jump, 'jump');
   assert.equal(out[0].n.first, true);
-  assert.match(said(out)[0], /Try 17\.5 kg next time/);
+  assert.match(said(out)[0], /next time is 17\.5 kg/);
 });
 
 test('L1: set 1 was high but the other sets were not, so no jump is promised', () => {
   const out = lift({ sets: [s(15, 16), s(15, 9)], planned: 2 });
   assert.equal(out[0].code, 'L1');
   assert.equal(out[0].n.jump, 'hold');
-  assert.doesNotMatch(said(out)[0], /Try/);
-  assert.match(said(out)[0], /once every set gets to 12/);
+  assert.doesNotMatch(said(out)[0], /next time is/);
+  // 15 kg to 17.5 kg is a 16.7% step, so the jump rule wants 15 reps on every set, not 12.
+  assert.equal(out[0].n.goal, 15);
+  assert.match(said(out)[0], /big one, so the weight goes up once every set gets to 15/);
 });
 
 test('L1: a big jump asks for the extra reps first, and says so', () => {
@@ -438,7 +440,7 @@ test('three days under 1,800 kcal is the first verdict, and its action is the fl
 
 test('flat after changing the target: give it time, do not cut again', () => {
   const out = run(three([86.5, 86.4, 86.5], { kcal: 2170 }), { targetChangedOn: '2026-11-03' });
-  assert.deepEqual([out.verdict.code, out.verdict.n.until], ['W8c', '2026-11-24']);
+  assert.deepEqual([out.verdict.code, out.verdict.n.until], ['W8c', '2026-11-26']);
   assert.equal(run(three([86.5, 86.4, 86.5], { kcal: 2170 }), { targetChangedOn: '2026-10-20' }).verdict.code, 'W8');
 });
 

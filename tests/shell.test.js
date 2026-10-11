@@ -70,3 +70,8 @@ test('readBackup: refuses anything that is not a usable backup, without throwing
     assert.equal(read.data, undefined);
   }
 });
+
+test('tidy: a day that is not a real calendar date is left out, so no screen ever does date sums on it', () => {
+  const days = tidy({ ...good, days: { '2026-13-45': { weightKg: 80 }, '2026-02-30': { weightKg: 80 }, '2026-10-10': { weightKg: 84.6 }, nope: {} } }).days;
+  assert.deepEqual(Object.keys(days), ['2026-10-10']);
+});

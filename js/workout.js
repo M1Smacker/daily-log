@@ -104,7 +104,7 @@ function reason(v, ex) {
   else if (p.type === 'cap') html = note('Heaviest dumbbell', `You have earned a jump, but ${p.kg} kg is the heaviest dumbbell.${ex.alt ? ` Switch to the alternative so this can keep getting heavier: ${esc(ex.alt)}.` : ''}`);
   // Sets at different weights are judged at one of them. Say which, so the sheet's weight is no surprise.
   if (p.kg && new Set(ex.last?.sets.map((s) => s.kg)).size > 1) {
-    html += note('More than one weight last time', `The sheet goes by the weight you did the most sets with, ${p.kg} kg. A heavier set counts as done. A lighter one means the weight stays for now. One weight for every set is easiest to build on.`);
+    html += note('More than one weight last time', `The sheet goes by the weight you did the most sets with, ${p.kg} kg. A heavier set counts as done if it reached the bottom of the range. A lighter one means the weight stays for now. One weight for every set is easiest to build on.`);
   }
   if (rules.wentBackwards(scores(v.c, ex.id, v.key))) {
     html += note('Two steps back', 'This lift has gone backwards two sessions in a row. Check sleep and food first. If those are fine, take an early deload week.', true);
@@ -156,10 +156,13 @@ function sheetRow(v, ex) {
 function coachVerdicts(v, ex, sets, alt = false) {
   const verdicts = coach.liftCheck({
     sets, lo: ex.reps[0], hi: ex.reps[1], kind: ex.kind, dumbbells: v.c.plan.dumbbells, planned: ex.planned,
-    effort: rules.targetRir(v.phase, v.key), firstTime: !ex.last, alt, hasAlt: Boolean(ex.alt),
+    effort: rules.targetRir(v.phase, v.key), firstTime: !ex.last, alt, hasAlt: Boolean(ex.alt), load: v.phase?.load,
   });
-  const today = sets.length && !alt && !v.w.minimum && v.phase?.load !== 'half' ? [rules.bestSet(sets)] : [];
-  const back = coach.liftBackwards([...scores(v.c, ex.id, v.key), ...today]);
+  // "Down two sessions running" compares whole sessions, so it waits until today's lift is whole:
+  // every planned set is in, or the session is finished. Half a lift always looks like a drop.
+  const whole = sets.length > 0 && (rules.workSets(sets).length >= ex.planned || v.w.finished);
+  const counts = whole && !alt && !v.w.minimum && v.phase?.load !== 'half';
+  const back = counts ? coach.liftBackwards([...scores(v.c, ex.id, v.key), rules.bestSet(sets)]) : null;
   return back ? [...verdicts, back] : verdicts;
 }
 const coachFor = (v, ex, sets, alt, after = '') => liftLines(coachVerdicts(v, ex, sets, alt), {}, after);

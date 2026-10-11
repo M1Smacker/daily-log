@@ -25,22 +25,32 @@ const range = (n) => `${n.lo} to ${n.hi}`;
 
 const reps = ([a, b]) => (a === b ? `about ${a}` : `${a} to ${b}`);
 
+// One sentence on when the weight goes up, built only from what the jump rule said.
+function goingUp(n) {
+  if (n.jump === 'jump' && n.next) return `Every planned set got there, so next time is ${kg(n.next)}.`;
+  if (n.jump === 'cap') return 'This is your heaviest, so the weight stays.';
+  return n.big
+    ? `The next step up is a big one, so the weight goes up once every set gets to ${n.goal}.`
+    : `The weight goes up once every set gets to ${n.goal}.`;
+}
+
 // Each entry is (n, ctx) => sentence. ctx carries what the rule does not know: the day's
 // name, the day's date and so on, supplied by the screen.
 export const WORDS = {
   // ----- Lift check -----
-  L1: (n) => {
-    const head = `Good news: you had more in you. ${n.F} reps is well above ${range(n)}.`;
-    if (n.jump === 'jump' && n.next) return `${head} Try ${kg(n.next)} next time.${n.first ? FIRST : ''}`;
-    const goal = n.jump === 'extra' && n.need ? n.need : n.hi;
-    return `${head} The weight goes up once every set gets to ${goal}.${n.first ? FIRST : ''}`;
-  },
-  L2: (n) => `Top of the range on set 1. If every set gets there, the weight goes up next time.${n.first ? FIRST : ''}`,
-  L3: (n) => `Right weight. ${n.F} reps sits inside ${range(n)}.${n.first ? FIRST : ''}`,
-  L4: (n) => `A little heavy: ${n.F} reps against ${range(n)}. Keep this weight and build the reps.${n.first ? FIRST : ''}`,
-  L5: (n) => `Too heavy for ${range(n)}: ${n.F} reps. ${n.prev
-    ? `Use ${kg(n.prev)} next time so set 1 lands inside the range.`
-    : 'Go a little lighter next time so set 1 lands inside the range.'}${n.first ? FIRST : ''}`,
+  // What is said about going up comes from the jump rule: n.jump is what the next sheet will do,
+  // n.goal the reps every planned set has to reach, n.big whether the step up is a big one.
+  L1: (n) => `Good news: you had more in you. ${n.F} reps is well above ${range(n)}. ${goingUp(n)}${n.first ? FIRST : ''}`,
+  L2: (n) => `Top of the range on set 1. ${goingUp(n)}${n.first ? FIRST : ''}`,
+  L3: (n) => `Right weight. ${n.F} reps sits inside ${range(n)}.${n.jump === 'jump' || (n.jump === 'extra' && n.F >= n.hi) ? ` ${goingUp(n)}` : ''}${n.first ? FIRST : ''}`,
+  L4: (n) => (n.opener
+    ? `Set 1 at ${kg(n.at)} was a little heavy: ${n.F} reps against ${range(n)}. Your other sets were at ${kg(n.kg)}, and the sheet stays there for now.`
+    : `A little heavy: ${n.F} reps against ${range(n)}. Keep this weight and build the reps.${n.first ? FIRST : ''}`),
+  L5: (n) => (n.opener
+    ? `Set 1 at ${kg(n.at)} was too heavy for ${range(n)}: ${n.F} reps. Start at ${kg(n.kg)} next time, the weight most of your sets used.`
+    : `Too heavy for ${range(n)}: ${n.F} reps. ${n.prev
+      ? `Use ${kg(n.prev)} next time so set 1 lands inside the range.`
+      : 'Go a little lighter next time so set 1 lands inside the range.'}${n.first ? FIRST : ''}`),
   L6a: () => 'Top of the range on your heaviest dumbbell. The weight stays. To keep it hard, take 3 seconds to lower it.',
   L6b: (n) => `You have outgrown the dumbbells for this lift. Next time ${n.hasAlt
     ? 'try the alternative listed for it.'
@@ -54,6 +64,7 @@ export const WORDS = {
   }[n.band] + (n.first ? FIRST : '')),
   L8: () => 'This lift has gone down two sessions in a row. Check sleep and food first, then an early deload.',
   L9: (n) => `Effort for this phase: leave ${reps(n.effort)} reps in the tank.`,
+  LD: (n) => `Deload: the weight stays and you stop ${n.effort ? `${reps(n.effort)} reps` : 'well'} short on purpose, so there is nothing to judge here.`,
 
   // ----- Sets check -----
   S2: () => 'One extra set is fine. If you are still sore after 2 days, stick to the plan next time.',
@@ -93,16 +104,16 @@ export const WORDS = {
 
   // ----- Week check: the verdict -----
   W0: (n) => `Your first full week ends on ${dateText(n.first)}. The first weekly check comes the day after.`,
-  W1: (n) => `Food was under your ${k(n.floor)} kcal floor on ${n.days} days this week.`,
+  W1: (n) => `Food was under your ${k(n.floor)} kcal floor on ${n.days} days of that week.`,
   W2: (n) => `Down ${dec(n.rate, 1)}% a week, which is faster than is safe for keeping muscle.`,
   W3: (n) => (n.kcal >= n.T + DAY.breakMinOver && n.enough
     ? 'Diet break week, and food is up where it belongs. Steady or up 0.5 to 1 kg is normal here. Weight verdicts resume after the break.'
     : 'Diet break week. A break only works at about maintenance, a few hundred kcal above your usual target. Steady or up 0.5 to 1 kg is normal here. Weight verdicts resume after the break.'),
-  W4: (n) => ({
-    start: `Early weight change is mostly water, so there is no weight verdict yet. It starts on ${dateText(n.until)}.`,
-    break: `Weight is settling after the diet break, so there is no weight verdict yet. It starts again on ${dateText(n.until)}.`,
-    creatine: `Creatine holds a little water in the first weeks, so there is no weight verdict yet. It starts again on ${dateText(n.until)}.`,
-  }[n.why]),
+  W4: (n) => `${{
+    start: 'Early weight change is mostly water, so there is no weight verdict yet.',
+    break: 'Weight is settling after the diet break, so there is no weight verdict yet.',
+    creatine: 'Creatine holds a little water in the first weeks, so there is no weight verdict yet.',
+  }[n.why]} The first one can come on ${dateText(n.until)}, if you weigh in on ${n.needed} or more mornings a week until then.`,
   W5: (n) => `No weight verdict yet. I need weigh-ins on ${n.needed} or more mornings in each of 3 weeks. I have ${n.counts[0]}, ${n.counts[1]} and ${n.counts[2]}.`,
   W6: (n) => `Scale flat, waist down ${dec(abs(n.waistCm), 1)} cm, ${n.up} of ${n.total} lifts up. Leave everything alone for another week.`,
   W7: (n) => `Food averaged ${k(n.kcal)} kcal from ${n.days} days, above your ${k(n.T)} target. Aim for ${k(n.T)} first. The plan has not had a fair run yet.`,
@@ -111,19 +122,27 @@ export const WORDS = {
   W8b: (n) => `The scale is flat while food averaged ${k(n.kcal)} kcal from ${n.days} days, under your ${k(n.T)} target. That usually means some food is missing from the log. Log everything for a week and look again.`,
   W8c: (n) => `You changed your calorie target on ${dateText(n.since)}. Give it time: the weight verdict comes back on ${dateText(n.until)}.`,
   W9: (n) => `The weight average is up ${dec(abs(n.rate), 1)}% a week. Hold a week and keep weighing. If it is still up, the stall choices apply.`,
-  W10: (n) => `Slow but moving: down ${dec(n.rate, 1)}% a week. Food averaged ${k(n.kcal)} kcal from ${n.days} days, so hold. If it is still slow in 2 weeks, we look at the stall choices.`,
-  W11: (n) => `On pace. Your 7-day average is down ${dec(n.rate, 1)}% a week over 2 weeks. Food averaged ${k(n.kcal)} kcal from ${n.days} days and you did ${n.sessions} of ${n.of} sessions. Nothing to change.`,
+  // A food average is only quoted when enough days could be judged (n.kcal is null otherwise).
+  W10: (n) => `Slow but moving: down ${dec(n.rate, 1)}% a week. ${n.kcal === null
+    ? 'Hold for now.'
+    : `Food averaged ${k(n.kcal)} kcal from ${n.days} days, so hold.`} If it is still slow in 2 weeks, we look at the stall choices.`,
+  W11: (n) => `On pace. Your 7-day average is down ${dec(n.rate, 1)}% a week over 2 weeks. ${n.kcal === null
+    ? `You did ${n.sessions} of ${n.of} sessions.`
+    : `Food averaged ${k(n.kcal)} kcal from ${n.days} days and you did ${n.sessions} of ${n.of} sessions.`} Nothing to change.`,
 
   // ----- Week check: lines under the verdict -----
-  F1: (n) => `Weight: 7-day average ${kg(n.avg)}, ${{
-    pace: 'on pace',
-    slow: 'slow',
-    flat: 'flat',
-    fast: 'too fast',
-    rising: 'rising',
-  }[n.band]} (${n.rate >= 0 ? 'down' : 'up'} ${dec(abs(n.rate), 1)}% a week).`,
-  F2: (n) => (n.kcal === undefined
-    ? `Food: judged on ${n.days} day${n.days === 1 ? '' : 's'} so far, which is too few for an average.`
+  F0: (n) => `Your calorie target is ${k(n.T)} kcal, under the ${k(n.floor)} floor. Raise it to ${k(n.floor)} or more in Settings. Everything here is measured against ${k(n.floor)}.`,
+  F1: (n) => (n.band
+    ? `Weight: 7-day average ${kg(n.avg)}, ${{
+      pace: 'on pace',
+      slow: 'slow',
+      flat: 'flat',
+      fast: 'too fast',
+      rising: 'rising',
+    }[n.band]} (${n.rate >= 0 ? 'down' : 'up'} ${dec(abs(n.rate), 1)}% a week).`
+    : `Weight: average ${kg(n.avg)} from ${n.weighIns} weigh-in${n.weighIns === 1 ? '' : 's'} that week. Too early to name a pace.`),
+  F2: (n) => (n.kcal == null
+    ? `Food: enough was logged on ${n.days} day${n.days === 1 ? '' : 's'} of that week, which is too few for an average.`
     : `Food: averaged ${k(n.kcal)} kcal from ${n.days} days, against ${k(n.T)}.`),
   F3: (n) => `Protein: ${k(n.g)} g average from ${n.days} days.`,
   F4: (n) => `Fibre: ${k(n.g)} g average from ${n.days} days.`,
@@ -139,11 +158,12 @@ export const WORDS = {
   // ----- Week check: actions -----
   A1: (n) => `Log food on more days. I could judge ${n.judged} of 7.`,
   A2: (n, ctx = {}) => {
-    if (n.type === 'eat-to-floor') return `Bring intake back to at least ${k(n.kcal)} kcal. Your target is ${k(ctx.T ?? n.kcal)}.`;
+    if (n.type === 'eat-to-floor') return `Bring intake back to at least ${k(n.kcal)} kcal.${ctx.T > n.kcal ? ` Your target is ${k(ctx.T)}.` : ''}`;
     if (n.type === 'add-kcal') return `Add ${k(n.kcal)} kcal a day, from carbs.`;
+    if (n.type === 'changed') return `You changed your calorie target on ${dateText(n.since)}. Leave it there for 2 weeks before changing it again.`;
     return n.cut
-      ? `Pick one: cut ${k(n.cut.kcal)} kcal from carbs or fat, or add ${k(n.addSteps)} steps a day.`
-      : `Add ${k(n.addSteps)} steps a day. Your calories are already close to the floor.`;
+      ? `Pick one: cut ${k(n.cut.kcal)} kcal from carbs or fat, or add ${k(n.addSteps)} steps a day. Then give it 2 weeks before changing anything else.`
+      : `Add ${k(n.addSteps)} steps a day, and give it 2 weeks. Your calories are already close to the floor.`;
   },
   A3: (n) => `${n.n} lifts went down two sessions running. Check sleep and food first, then an early deload.`,
   A4: (n) => `Protein averaged ${k(n.g)} g. Aim for ${k(n.goal)} or more.`,

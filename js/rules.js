@@ -135,7 +135,8 @@ export function planFrom(base, saved) {
   const isMap = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
   const plan = { ...base };
   if (Number.isInteger(s.rolloverHour) && s.rolloverHour >= 0 && s.rolloverHour <= 6) plan.rolloverHour = s.rolloverHour;
-  if (Array.isArray(s.dumbbells) && s.dumbbells.length >= 2 && s.dumbbells.every((n) => typeof n === 'number' && n > 0)) plan.dumbbells = s.dumbbells;
+  // In order, lightest first: the next weight up is found by walking the list.
+  if (Array.isArray(s.dumbbells) && s.dumbbells.length >= 2 && s.dumbbells.every((n) => typeof n === 'number' && n > 0)) plan.dumbbells = [...new Set(s.dumbbells)].sort((a, b) => a - b);
   if (isMap(s.swaps)) {
     plan.swaps = Object.fromEntries(Object.entries(s.swaps)
       .filter(([, v]) => isMap(v) && typeof v.name === 'string' && typeof v.kind === 'string'));
@@ -188,17 +189,29 @@ export function nextWeight(kind, kg, dumbbells) {
 }
 
 // The step down from a weight: the next lighter dumbbell, or one jump less. Null when there is none.
+// What it takes to go up from kg: the next weight (null at the heaviest), and the reps every
+// planned set has to reach. That is the top of the range, or a few more when the step up is big.
+export function jumpGoal(kind, kg, top, dumbbells) {
+  const to = nextWeight(kind, kg, dumbbells);
+  const big = to !== null && kg > 0 && (to - kg) / kg > BIG_JUMP;
+  return { to, big, need: big ? top + EXTRA_REPS : top };
+}
+
 export function previousWeight(kind, kg, dumbbells) {
   if (kind === 'dumbbell') return [...dumbbells].reverse().find((w) => w < kg) ?? null;
   return JUMP_KG[kind] && kg - JUMP_KG[kind] > 0 ? kg - JUMP_KG[kind] : null;
 }
 
-// A set under 70% of the heaviest set of the lift is a warm-up. It is not work: it never blocks
-// a jump, and it is left out when sets are counted.
+// A light set before the work starts is a warm-up: one under 70% of the heaviest set of the lift,
+// done before the first set at or above that. It is not work, so it never blocks a jump and is
+// left out when sets are counted. A lighter set done AFTER the work has started is a back-off
+// set, and that is real work.
 export const WARMUP_SHARE = 0.7;
 export function workSets(sets) {
   const top = Math.max(0, ...sets.map((s) => s.kg ?? 0));
-  return top > 0 ? sets.filter((s) => (s.kg ?? 0) >= WARMUP_SHARE * top) : sets;
+  if (!(top > 0)) return sets;
+  const start = sets.findIndex((s) => (s.kg ?? 0) >= WARMUP_SHARE * top);
+  return sets.slice(start);
 }
 
 // The jump rule (double progression). Keep the weight until every set reaches the top of
@@ -223,21 +236,24 @@ export function progression(ex, last, dumbbells) {
   if (!(kg > 0)) return { type: 'start' };
 
   // When the sets were not all at one weight, the lift is judged at the weight most of them
-  // were done with. A set at a heavier weight was harder than asked, so it counts as reached.
-  // A lighter set does not: the weight stays until every set is done at it.
+  // were done with. A set at a heavier weight was harder than asked, so it counts as reached,
+  // as long as it got at least the bottom of the range: one or two reps with a weight that was
+  // far too heavy shows nothing. A lighter set does not count: the weight stays until every set
+  // is done at it.
   // Only the planned sets decide. A tired extra set is a bonus and never holds the weight back.
   const top = last.top ?? ex.reps[1];
+  const bottom = ex.reps?.[0] ?? 1;
   const planned = last.planned ?? 1;
   const deciding = sets.slice(0, planned);
-  const reached = (reps) => deciding.every((s) => (s.kg ?? 0) > kg || ((s.kg ?? 0) === kg && s.reps >= reps));
+  const reached = (reps) => deciding.every((s) =>
+    ((s.kg ?? 0) > kg && s.reps >= bottom) || ((s.kg ?? 0) === kg && s.reps >= reps));
   const effortOk = deciding.every((s) => s.rir == null || s.rir >= (last.rirLo ?? 0));
   const earned = sets.length >= planned && reached(top) && effortOk;
   if (!earned) return { type: 'hold', kg };
 
-  const to = nextWeight(ex.kind, kg, dumbbells);
+  const { to, big, need } = jumpGoal(ex.kind, kg, top, dumbbells);
   if (to === null) return { type: 'cap', kg };
-  const need = top + EXTRA_REPS;
-  if ((to - kg) / kg > BIG_JUMP && !reached(need)) return { type: 'extra', kg, to, need };
+  if (big && !reached(need)) return { type: 'extra', kg, to, need };
   return { type: 'jump', kg, to };
 }
 
@@ -245,11 +261,16 @@ export function progression(ex, last, dumbbells) {
 // weight and reps. Older recaps held one weight and the fewest reps, and are read as that many
 // equal sets. A set with no reps was not done.
 export function setsOf(lift) {
-  if (!lift) return [];
+  if (!lift || typeof lift !== 'object') return [];
   const sets = Array.isArray(lift.sets) ? lift.sets
     : Array.from({ length: lift.planned ?? 1 }, () => ({ kg: lift.kg, reps: lift.reps }));
-  return sets.filter((s) => s && s.reps > 0);
+  return sets.filter(realSet);
 }
+// A set that was really done: a whole count of reps above zero, and a weight that is a number
+// when there is one. Damaged data (text where a number belongs) is left out, never guessed at.
+export const realSet = (s) => Boolean(s) && typeof s === 'object'
+  && typeof s.reps === 'number' && Number.isFinite(s.reps) && s.reps > 0
+  && (s.kg == null || (typeof s.kg === 'number' && Number.isFinite(s.kg) && s.kg >= 0));
 
 // The weight most of the sets were done with. When two weights tie, the lighter one.
 export function workingKg(sets) {
@@ -395,9 +416,18 @@ export function finishKcal(kcal, startKg, nowKg) {
 }
 // The profile with the date its calorie target last changed. Used when targets are saved.
 // A profile with no earlier one has no change to date, so nothing is added.
+// targetWas is what the target was before that day's change, so a slip put right the same day
+// (2,200 to 2,050 and straight back) is not counted as a change at all.
 export function withTargetDate(before, next, key) {
-  if (!before?.targets || before.targets.kcal === next.targets?.kcal) return { ...next, ...(before?.targetChangedOn ? { targetChangedOn: before.targetChangedOn } : {}) };
-  return { ...next, targetChangedOn: key };
+  const was = before?.targets?.kcal;
+  const now = next.targets?.kcal;
+  const kept = before?.targetChangedOn
+    ? { targetChangedOn: before.targetChangedOn, ...(before.targetWas != null ? { targetWas: before.targetWas } : {}) } : {};
+  const { targetChangedOn: _a, targetWas: _b, ...clean } = next;
+  if (was == null || was === now) return { ...clean, ...kept };
+  const sameDay = before.targetChangedOn === key && before.targetWas != null;
+  if (sameDay && before.targetWas === now) return clean;
+  return { ...clean, targetChangedOn: key, targetWas: sameDay ? before.targetWas : was };
 }
 
 // True in the phase that follows a maintenance phase.
@@ -503,6 +533,11 @@ export function pastMeals(days, key, meal, span = 14) {
   return out;
 }
 
+// The nutrients that at least one entry has no number for. A total over them is "at least".
+export function unknownIn(entries) {
+  return MACROS.filter((m) => entries.some((e) => e[m] == null));
+}
+
 export function totals(entries) {
   const sum = Object.fromEntries(MACROS.map((m) => [m, 0]));
   for (const e of entries) for (const m of MACROS) sum[m] += e[m] ?? 0;
@@ -515,15 +550,26 @@ export function totals(entries) {
 // last day (today, for the week still running), with its change from seven days before.
 //   sched: the days from schedule(). Returns [{ first, last, running, foodDays, kcal, protein,
 //   done, planned, weight, change }], with null where there is nothing to go on.
-export function weeks(days, sched, key, weekStartDow, planStart, count = 6) {
+// judge: an optional test for whether a day's food is complete enough to count. With one, a
+// half-logged day is left out, so is today (still being eaten), and protein is averaged only over
+// days where every entry has a protein number. Without one, every day with food counts.
+export function weeks(days, sched, key, weekStartDow, planStart, count = 6, judge = null) {
   const out = [];
   let first = addDays(key, -((weekday(key) - weekStartDow + 7) % 7));
   for (; out.length < count && addDays(first, 6) >= planStart; first = addDays(first, -7)) {
     const last = addDays(first, 6);
     const upTo = last < key ? last : key;
     const fed = [];
-    for (let k = first; k <= upTo; k = addDays(k, 1)) if (days[k]?.food?.length) fed.push(totals(days[k].food));
-    const avg = (m) => (fed.length ? Math.round(fed.reduce((a, t) => a + t[m], 0) / fed.length) : null);
+    const known = { kcal: [], protein: [] };
+    for (let k = first; k <= upTo; k = addDays(k, 1)) {
+      const food = days[k]?.food;
+      if (!food?.length || (judge && (k >= key || !judge(food)))) continue;
+      const t = totals(food);
+      fed.push(t);
+      known.kcal.push(t.kcal);
+      if (!judge || !unknownIn(food).includes('protein')) known.protein.push(t.protein);
+    }
+    const avg = (m) => (known[m].length ? Math.round(known[m].reduce((a, b) => a + b, 0) / known[m].length) : null);
     const inWeek = sched.filter((d) => d.key >= first && d.key <= last);
     const done = inWeek.filter((d) => d.state === 'done' || d.state === 'min').length;
     const weight = weightAverage(days, upTo);
