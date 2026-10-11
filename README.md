@@ -27,6 +27,7 @@ node --test
 - `js/exercises.js` is the four sessions and their lifts. `js/foods.js` is the preloaded food list. `js/guide.js` is the guide text.
 - `js/rules.js` holds every rule as a pure function (day rollover, schedule and missed days, jump rule, stall check, macro maths). Tests are in `tests/`.
 - `js/coach.js` is the Coach: fixed rules that grade what was logged (lift, sets, day, week). `js/coach-constants.js` holds every threshold, `js/coach-words.js` every sentence. It only reads data, saves nothing, and has no AI.
+- `js/briefing.js` picks the four parts of the Coach's weekly briefing from the week check, and `js/briefing-words.js` holds its sentences. It summarises the card and never works out a second opinion.
 - `js/store.js` is where data is saved. `js/state.js` turns it into what the screens need.
 - `js/today.js`, `js/workout.js`, `js/food.js`, `js/progress.js`, `js/settings.js` are the screens. `js/app.js` is the shell around them.
 - `css/app.css` has the colour tokens at the top.

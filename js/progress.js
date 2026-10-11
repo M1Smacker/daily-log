@@ -7,7 +7,7 @@ import { ctx } from './state.js';
 import { sessions } from './exercises.js';
 import { logged, asSets } from './workout.js';
 import { esc, num, fmt, shortDate, litres, actions, forms, openSheet, field, readNumber } from './ui.js';
-import { weekCardHtml, coachCodes } from './coach-ui.js';
+import { weekCardHtml, coachCodes, briefingCardHtml } from './coach-ui.js';
 import { dayFacts, isJudgeable } from './coach.js';
 import { DAY as COACH_DAY } from './coach-constants.js';
 
@@ -260,7 +260,7 @@ export function progressBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   return weightCard(c) + `<div class="grid2">${waistCard(c)}${sessionsCard(c, days)}</div>` +
-    weekCardHtml(c) + weekCard(c, days) + liftsCard(c) + phasesCard(c) + photosCard(c) + dataCard();
+    briefingCardHtml(c) + weekCardHtml(c) + weekCard(c, days) + liftsCard(c) + phasesCard(c) + photosCard(c) + dataCard();
 }
 
 // ----- Handlers -----

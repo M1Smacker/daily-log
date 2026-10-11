@@ -465,7 +465,7 @@ test('actions: at most two, a watch puts its own action first, and food logging 
   const days = three([86.5, 86.4, 86.5], { kcal: 2170, foodDays: 6, sessions: 1, protein: 90 });
   const out = run(days);
   assert.equal(out.verdict.code, 'W8');
-  assert.deepEqual(out.actions.map((a) => a.code), ['A2', 'A4']);
+  assert.deepEqual(out.actions.map((a) => a.code), ['A2', 'A6']); // the stall choice, then 1 of 4 sessions, before protein
   const sparse = run(three([88.0, 87.2, 86.5], { kcal: 2150, foodDays: 3 }));
   assert.equal(sparse.verdict.code, 'W11');
   assert.equal(sparse.actions[0].code, 'A1');

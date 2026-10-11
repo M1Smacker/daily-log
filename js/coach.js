@@ -264,7 +264,10 @@ export function paceBand(rate) {
 // How each lift did in the latest session against the one before it. A lift is "up" when its
 // working weight rose, or it stayed and the reps at that weight rose by 1 or more. Only lifts
 // logged in two or more sessions count, and the latest of them has to fall inside [from, to].
-export function liftTrends({ days, from, to }) {
+// since: compare the latest session with the very first one instead (the whole journey), with no
+// need for it to fall inside the week.
+// Returns the counts and each lift: { id, dir, from: kg before, to: kg now, downTwice }.
+export function liftTrends({ days, from, to, since = false }) {
   const history = {};
   for (const k of Object.keys(days).sort()) {
     if (k > to) break;
@@ -283,10 +286,11 @@ export function liftTrends({ days, from, to }) {
       });
     }
   }
-  const out = { up: 0, held: 0, down: 0, total: 0, downTwice: 0 };
-  for (const list of Object.values(history)) {
-    if (list.length < 2 || list.at(-1).key < from) continue;
-    const [prev, cur] = list.slice(-2);
+  const out = { up: 0, held: 0, down: 0, total: 0, downTwice: 0, lifts: [] };
+  for (const [id, list] of Object.entries(history)) {
+    if (list.length < 2 || (!since && list.at(-1).key < from)) continue;
+    const cur = list.at(-1);
+    const prev = since ? list[0] : list.at(-2);
     let dir = 'held';
     if (cur.kg > prev.kg) dir = 'up';
     else if (cur.kg < prev.kg) dir = 'down';
@@ -296,7 +300,9 @@ export function liftTrends({ days, from, to }) {
     }
     out[dir]++;
     out.total++;
-    if (rules.wentBackwards(list.filter((x) => !x.minimum).map((x) => x.score))) out.downTwice++;
+    const twice = !since && rules.wentBackwards(list.filter((x) => !x.minimum).map((x) => x.score));
+    if (twice) out.downTwice++;
+    out.lifts.push({ id, dir, from: prev.kg, to: cur.kg, downTwice: twice });
   }
   return out;
 }
@@ -322,7 +328,7 @@ export function waistChange(days, to) {
 //   targetChangedOn   the day the calorie target last changed, or null
 //   planLine  the kg the plan line says on the week's last day, or null
 // Returns { week: { from, to }, verdict, actions: [{ code, ... }], lines: [verdict], soFar }.
-export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targetChangedOn: changed = null, planLine = null }) {
+export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targetChangedOn: changed = null, planLine = null, startKg = null }) {
   // A target set under the floor is never what the Coach tells you to aim for: everything is
   // measured against the floor instead, and a line says the target is too low.
   const T = isNum(setTarget) ? Math.max(setTarget, RAILS.kcalFloor) : setTarget;
@@ -333,7 +339,14 @@ export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targ
   const soFar = soFarCounts({ days, from: addDays(A, 1), to: addDays(key, -1) });
 
   if (diffDays(A, plan.start) < 6) {
-    return { week: null, verdict: v('W0', 'note', { first: firstWeekEnd(plan) }), actions: [], lines: [], soFar };
+    // Too early for a read, but never too early to say a target is set under the floor.
+    const low = isNum(setTarget) && setTarget < RAILS.kcalFloor;
+    return {
+      week: null, verdict: v('W0', 'note', { first: firstWeekEnd(plan) }),
+      actions: low ? [{ code: 'A0', T: setTarget, floor: RAILS.kcalFloor }] : [],
+      lines: low ? [v('F0', 'watch', { T: setTarget, floor: RAILS.kcalFloor })] : [],
+      soFar, facts: null,
+    };
   }
 
   const windows = weightWindows({ plan, days });
@@ -352,32 +365,42 @@ export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targ
   const trends = liftTrends({ days, from: w0.from, to: w0.to });
   const waist = waistChange(days, w0.to);
   const hundredth = (n) => Math.round(n * 100) / 100;
-  const nums = { rate: rate === null ? null : hundredth(rate), kgWeek: kgWeek === null ? null : hundredth(kgWeek), avg: w0.avg };
+  // rate1 is the rate as it is shown, rounded once from the real figure. Rounding the rounded
+  // rate again can land on the wrong side (0.853 would show as 0.8).
+  const nums = { rate: rate === null ? null : hundredth(rate), rate1: rate === null ? null : Math.round(rate * 10) / 10, kgWeek: kgWeek === null ? null : hundredth(kgWeek), avg: w0.avg };
+
+  // A rough maintenance figure, for the diet break. Null when there is nothing to work it out from.
+  const lastAvg = weeks.map((w) => w.avg).find((a) => a !== null) ?? null;
+  const maintenance = lastAvg === null ? null : rules.maintenanceKcal(T, plan.deficitKcal, startKg, lastAvg);
 
   const actions = [];
   let verdict;
-  let own = null; // the verdict's own action (A2)
+  // The verdict's own action (A2). Every piece of advice is an action, never buried in the
+  // verdict's sentence. urgent: it goes first on the card whatever else applies.
+  let own = null;
 
   if (food.underFloor >= WEEK.floorDays) {
     verdict = v('W1', 'watch', { days: food.underFloor, T, floor: RAILS.kcalFloor });
-    own = { code: 'A2', type: 'eat-to-floor', kcal: RAILS.kcalFloor };
+    own = { code: 'A2', type: 'eat-to-floor', kcal: RAILS.kcalFloor, urgent: true };
   } else if (basis >= 2 && (rate > WEEK.fastPct || kgWeek > RAILS.maxLossKgPerWeek)) {
     verdict = v('W2', 'watch', nums);
     // The rate looks back two weeks. A target changed inside them has not had time to show, so
     // asking for another 150 would stack one change on top of the other.
     const since = targetChangedOn && targetChangedOn >= w1.from ? targetChangedOn : null;
     own = since
-      ? { code: 'A2', type: 'changed', since }
-      : { code: 'A2', type: 'add-kcal', kcal: WEEK.addKcalWhenFast, newKcalTarget: T + WEEK.addKcalWhenFast, from: 'carbs' };
+      ? { code: 'A2', type: 'changed', since, urgent: true }
+      : { code: 'A2', type: 'add-kcal', kcal: WEEK.addKcalWhenFast, newKcalTarget: T + WEEK.addKcalWhenFast, from: 'carbs', urgent: true };
   } else if (w0.inBreak >= 4) {
     const enough = food.days >= WEEK.judgeableDays;
     const atMaintenance = enough && food.kcal >= T + DAY.breakMinOver;
     verdict = v('W3', atMaintenance ? 'good' : 'note', { kcal: food.kcal, days: food.days, T, enough });
+    if (enough && !atMaintenance) own = { code: 'A2', type: 'break-eat', kcal: food.kcal, maintenance };
   } else if (weeks.some((w) => w.window)) {
     const latest = weeks.filter((w) => w.window).map((w) => w.window).sort((a, b) => (a[1] < b[1] ? 1 : -1))[0];
     verdict = v('W4', 'note', { why: latest[2], until: clearDay(latest[1], plan.weekStartDow), needed: WEEK.weighIns });
   } else if (!gateA) {
     verdict = v('W5', 'note', { counts: [w2.weighIns, w1.weighIns, w0.weighIns], needed: WEEK.weighIns });
+    own = { code: 'A2', type: 'weigh', counts: [w2.weighIns, w1.weighIns, w0.weighIns], needed: WEEK.weighIns };
   } else {
     const flatish = ['flat', 'slow', 'rising'].includes(band);
     const settled = food.days >= WEEK.settledDays;
@@ -385,11 +408,13 @@ export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targ
     if (recomp) {
       verdict = v('W6', 'good', { ...nums, waistCm: waist.cm, up: trends.up, total: trends.total });
     } else if (flatish && settled && food.kcal > T + WEEK.aboveTargetOver) {
-      verdict = v('W7', 'note', { ...nums, kcal: food.kcal, days: food.days, T });
+      verdict = v('W7', 'note', { ...nums, band, kcal: food.kcal, days: food.days, T });
+      own = { code: 'A2', type: 'aim', kcal: T, over: Math.round(food.kcal - T), band };
     } else if (band === 'flat') {
       const since = targetChangedOn && targetChangedOn >= w2.from ? targetChangedOn : null;
       if (since) {
         verdict = v('W8c', 'note', { since, until: clearDay(since, plan.weekStartDow), T });
+        own = { code: 'A2', type: 'wait', since, until: clearDay(since, plan.weekStartDow) };
       } else if (!settled) {
         verdict = v('W8a', 'note', { ...nums, days: food.days });
       } else if (food.kcal >= T - WEEK.stallWithin) {
@@ -397,30 +422,37 @@ export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targ
         const cut = withinRails({ newKcalTarget: cutTo, cuts: ['carbs', 'fat'] })
           ? { kcal: WEEK.cutKcal, newKcalTarget: cutTo, from: ['carbs', 'fat'] } : null;
         verdict = v('W8', 'watch', { ...nums, kcal: food.kcal, days: food.days, canCut: Boolean(cut), steps: WEEK.addSteps });
-        own = { code: 'A2', type: 'stall-choice', cut, addSteps: WEEK.addSteps };
+        own = { code: 'A2', type: 'stall-choice', cut, addSteps: WEEK.addSteps, urgent: true };
       } else {
         verdict = v('W8b', 'note', { ...nums, kcal: food.kcal, days: food.days, T });
+        own = { code: 'A2', type: 'log-all', kcal: food.kcal, T };
       }
     } else if (band === 'rising') {
       verdict = v('W9', 'watch', nums);
+      own = { code: 'A2', type: 'hold-rising' };
     } else if (band === 'slow') {
       verdict = v('W10', 'note', { ...nums, ...foodNums });
+      own = { code: 'A2', type: 'hold-slow' };
     } else {
       verdict = v('W11', 'good', { ...nums, ...foodNums, sessions: w0.sessions, of: sessionsPerWeek });
     }
   }
 
-  // Actions: at most two. When the verdict is a watch, its own action goes first.
+  // Actions: at most two, in this order. Safety first (a target under the floor, eating under it,
+  // losing too fast) and the stall choice. Then the log, because nothing else can be judged
+  // without it. Then the verdict's own advice, sessions, lifts, protein and steps.
   const candidates = [];
+  if (isNum(setTarget) && setTarget < RAILS.kcalFloor) candidates.push({ code: 'A0', T: setTarget, floor: RAILS.kcalFloor });
+  if (own?.urgent) candidates.push(own);
   if (food.days < 5) candidates.push({ code: 'A1', judged: food.days });
-  if (own) candidates.push(own);
-  if (trends.downTwice >= 2) candidates.push({ code: 'A3', n: trends.downTwice });
+  if (own && !own.urgent) candidates.push(own);
+  if (w0.sessions <= 1) candidates.push({ code: 'A6', done: w0.sessions, of: sessionsPerWeek });
+  const twice = trends.lifts.filter((l) => l.downTwice).map((l) => l.id);
+  if (trends.downTwice >= 2) candidates.push({ code: 'A3', n: trends.downTwice, lifts: twice });
   const proteinLow = P - DAY.proteinGoodBelowTarget;
   if (food.proteinDays >= WEEK.judgeableDays && food.protein < proteinLow) candidates.push({ code: 'A4', g: Math.round(food.protein), goal: proteinLow });
   const stepGoal = rules.stepTarget(w0.to, plan.start, plan.steps);
   if (w0.stepDays >= LINES.stepsMinDays && w0.steps < LINES.stepsLowShare * stepGoal) candidates.push({ code: 'A5', steps: Math.round(w0.steps), goal: stepGoal });
-  if (w0.sessions <= 1) candidates.push({ code: 'A6', done: w0.sessions, of: sessionsPerWeek });
-  if (verdict.level === 'watch') candidates.sort((a, b) => (b.code === 'A2') - (a.code === 'A2'));
   for (const a of candidates) {
     if (actions.length >= 2) break;
     if (withinRails(a)) actions.push(a);
@@ -475,7 +507,20 @@ export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targ
     lines.push(v('F10', level, { diff, avg: w0.avg, planLine }));
   }
 
-  return { week: { from: w0.from, to: w0.to }, verdict, actions, lines, soFar };
+  // The same facts the verdict, the actions and the lines were built from, for the briefing.
+  // It reads these and never works out a second opinion.
+  const facts = {
+    weighIns: w0.weighIns, avg: w0.avg, basis, rate: nums.rate, rate1: nums.rate1, band: basis === 3 ? band : null,
+    window: w0.window ? w0.window[2] : null, inBreak: w0.inBreak >= 4,
+    until: verdict.code === 'W4' ? verdict.n.until : null,
+    foodDays: food.days, kcal: fed ? food.kcal : null,
+    protein: food.proteinDays >= WEEK.judgeableDays ? Math.round(food.protein) : null,
+    sessions: w0.sessions, of: sessionsPerWeek,
+    steps: w0.stepDays >= LINES.stepsMinDays ? Math.round(w0.steps) : null, stepGoal,
+    lifts: trends.lifts, liftsUp: trends.up, liftsDown: trends.down, liftsTotal: trends.total,
+    T, P, maintenance, allActions: candidates.filter(withinRails).length,
+  };
+  return { week: { from: w0.from, to: w0.to }, verdict, actions, lines, soFar, facts };
 }
 
 // ----- Week helpers -----
@@ -520,12 +565,12 @@ function soFarCounts({ days, from, to }) {
 // The first day a weight verdict can speak again after `end` (the last day of a quiet period, or
 // the day a target changed): it takes three finished weeks that all start after it, and the
 // verdict is given the day after the third one ends.
-function clearDay(end, weekStartDow) {
+export function clearDay(end, weekStartDow) {
   let d = addDays(end, 21);
   while (weekday(d) !== (weekStartDow + 6) % 7) d = addDays(d, 1);
   return addDays(d, 1);
 }
-function firstWeekEnd(plan) {
+export function firstWeekEnd(plan) {
   let d = addDays(plan.start, 6);
   while (weekday(d) !== (plan.weekStartDow + 6) % 7) d = addDays(d, 1);
   return d;
@@ -538,5 +583,5 @@ export const ALL_CODES = Object.freeze([
   'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D6u', 'D7', 'D8', 'D9', 'DB',
   'W0', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7', 'W8', 'W8a', 'W8b', 'W8c', 'W9', 'W10', 'W11',
   'F0', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10',
-  'A1', 'A2', 'A3', 'A4', 'A5', 'A6',
+  'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6',
 ]);

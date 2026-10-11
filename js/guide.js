@@ -106,6 +106,7 @@ export const topics = [
             <li><b>Sets:</b> a note when you did more or fewer sets than the sheet asked for. One extra set is always fine.</li>
             <li><b>Each morning:</b> yesterday's food against your targets. A day with too little logged is not judged and not counted.</li>
             <li><b>Each Thursday:</b> the week before. Your weight trend, food, sessions and lifts, with one verdict and at most two things to do.</li>
+            <li><b>The briefing:</b> on Progress, above the week. Four short parts: where you are, what is working, the one thing to fix and what comes next. It changes once a week, on Thursday, so there is nothing to check in between.</li>
           </ul>
           <p>It cannot see your form, how hard a set felt, or food you did not log. For anything odd, use the Copy button on Progress and ask Claude.</p>
           <p>It never suggests under 1,800 kcal, more than 1 kg a week of loss, or cutting protein.</p>`,

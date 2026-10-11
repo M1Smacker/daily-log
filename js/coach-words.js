@@ -105,7 +105,7 @@ export const WORDS = {
   // ----- Week check: the verdict -----
   W0: (n) => `Your first full week ends on ${dateText(n.first)}. The first weekly check comes the day after.`,
   W1: (n) => `Food was under your ${k(n.floor)} kcal floor on ${n.days} days of that week.`,
-  W2: (n) => `Down ${dec(n.rate, 1)}% a week, which is faster than is safe for keeping muscle.`,
+  W2: (n) => `Down ${dec(n.rate1 ?? n.rate, 1)}% a week, which is faster than is safe for keeping muscle.`,
   W3: (n) => (n.kcal >= n.T + DAY.breakMinOver && n.enough
     ? 'Diet break week, and food is up where it belongs. Steady or up 0.5 to 1 kg is normal here. Weight verdicts resume after the break.'
     : 'Diet break week. A break only works at about maintenance, a few hundred kcal above your usual target. Steady or up 0.5 to 1 kg is normal here. Weight verdicts resume after the break.'),
@@ -116,17 +116,15 @@ export const WORDS = {
   }[n.why]} The first one can come on ${dateText(n.until)}, if you weigh in on ${n.needed} or more mornings a week until then.`,
   W5: (n) => `No weight verdict yet. I need weigh-ins on ${n.needed} or more mornings in each of 3 weeks. I have ${n.counts[0]}, ${n.counts[1]} and ${n.counts[2]}.`,
   W6: (n) => `Scale flat, waist down ${dec(abs(n.waistCm), 1)} cm, ${n.up} of ${n.total} lifts up. Leave everything alone for another week.`,
-  W7: (n) => `Food averaged ${k(n.kcal)} kcal from ${n.days} days, above your ${k(n.T)} target. Aim for ${k(n.T)} first. The plan has not had a fair run yet.`,
+  W7: (n) => `Food averaged ${k(n.kcal)} kcal from ${n.days} days, above your ${k(n.T)} target.`,
   W8: (n) => `The scale has been flat for 2 weeks while food sat on target (${k(n.kcal)} kcal from ${n.days} days).`,
-  W8a: (n) => `The scale is flat, but food was logged enough on only ${n.days} days, so I can't tell why. Log food on more days first.`,
-  W8b: (n) => `The scale is flat while food averaged ${k(n.kcal)} kcal from ${n.days} days, under your ${k(n.T)} target. That usually means some food is missing from the log. Log everything for a week and look again.`,
-  W8c: (n) => `You changed your calorie target on ${dateText(n.since)}. Give it time: the weight verdict comes back on ${dateText(n.until)}.`,
-  W9: (n) => `The weight average is up ${dec(abs(n.rate), 1)}% a week. Hold a week and keep weighing. If it is still up, the stall choices apply.`,
+  W8a: (n) => `The scale is flat, but food was logged enough on only ${n.days} days, so I can't tell why.`,
+  W8b: (n) => `The scale is flat while food averaged ${k(n.kcal)} kcal from ${n.days} days, under your ${k(n.T)} target. That usually means some food is missing from the log.`,
+  W8c: (n) => `The scale is flat, and you changed your calorie target on ${dateText(n.since)}.`,
+  W9: (n) => `The weight average is up ${dec(abs(n.rate1 ?? n.rate), 1)}% a week.`,
   // A food average is only quoted when enough days could be judged (n.kcal is null otherwise).
-  W10: (n) => `Slow but moving: down ${dec(n.rate, 1)}% a week. ${n.kcal === null
-    ? 'Hold for now.'
-    : `Food averaged ${k(n.kcal)} kcal from ${n.days} days, so hold.`} If it is still slow in 2 weeks, we look at the stall choices.`,
-  W11: (n) => `On pace. Your 7-day average is down ${dec(n.rate, 1)}% a week over 2 weeks. ${n.kcal === null
+  W10: (n) => `Slow but moving: down ${dec(n.rate1 ?? n.rate, 1)}% a week.${n.kcal === null ? '' : ` Food averaged ${k(n.kcal)} kcal from ${n.days} days.`}`,
+  W11: (n) => `On pace. Your 7-day average is down ${dec(n.rate1 ?? n.rate, 1)}% a week over 2 weeks. ${n.kcal === null
     ? `You did ${n.sessions} of ${n.of} sessions.`
     : `Food averaged ${k(n.kcal)} kcal from ${n.days} days and you did ${n.sessions} of ${n.of} sessions.`} Nothing to change.`,
 
@@ -139,7 +137,7 @@ export const WORDS = {
       flat: 'flat',
       fast: 'too fast',
       rising: 'rising',
-    }[n.band]} (${n.rate >= 0 ? 'down' : 'up'} ${dec(abs(n.rate), 1)}% a week).`
+    }[n.band]} (${n.rate >= 0 ? 'down' : 'up'} ${dec(abs(n.rate1 ?? n.rate), 1)}% a week).`
     : `Weight: average ${kg(n.avg)} from ${n.weighIns} weigh-in${n.weighIns === 1 ? '' : 's'} that week. Too early to name a pace.`),
   F2: (n) => (n.kcal == null
     ? `Food: enough was logged on ${n.days} day${n.days === 1 ? '' : 's'} of that week, which is too few for an average.`
@@ -148,7 +146,7 @@ export const WORDS = {
   F4: (n) => `Fibre: ${k(n.g)} g average from ${n.days} days.`,
   F5: (n) => `Water: ${dec(n.ml / 1000, 1)} L average over ${n.days} days.`,
   F6: (n) => `Steps: ${k(n.steps)} average over ${n.days} days, against ${k(n.goal)}.`,
-  F7: (n) => `Sessions: ${n.done} of ${n.of}. A Minimum session counts as a full one.`,
+  F7: (n) => (n.done > n.of ? `Sessions: ${n.done}, with ${n.of} planned.` : `Sessions: ${n.done} of ${n.of}. A Minimum session counts as a full one.`),
   F8: (n) => `Lifts: ${n.up} up, ${n.held} held, ${n.down} down, out of ${n.total}. Holding strength in a deficit is a win.`,
   F9: (n) => `Waist: ${n.cm <= 0 ? 'down' : 'up'} ${dec(abs(n.cm), 1)} cm since ${dateText(n.from)}.`,
   F10: (n, ctx = {}) => (abs(n.diff) < 0.05
@@ -156,11 +154,19 @@ export const WORDS = {
     : `Against the plan line: you are ${dec(abs(n.diff), 1)} kg ${n.diff < 0 ? 'ahead' : 'above it'}.${n.diff < 0 && ctx.level === 'note' ? ' Check it is not too fast.' : ''}`),
 
   // ----- Week check: actions -----
+  A0: (n) => `Raise your calorie target to ${k(n.floor)} or more in Settings. It is set to ${k(n.T)}, under the floor.`,
   A1: (n) => `Log food on more days. I could judge ${n.judged} of 7.`,
   A2: (n, ctx = {}) => {
     if (n.type === 'eat-to-floor') return `Bring intake back to at least ${k(n.kcal)} kcal.${ctx.T > n.kcal ? ` Your target is ${k(ctx.T)}.` : ''}`;
     if (n.type === 'add-kcal') return `Add ${k(n.kcal)} kcal a day, from carbs.`;
     if (n.type === 'changed') return `You changed your calorie target on ${dateText(n.since)}. Leave it there for 2 weeks before changing it again.`;
+    if (n.type === 'aim') return `Aim for ${k(n.kcal)} first. The plan has not had a fair run yet.`;
+    if (n.type === 'weigh') return 'Weigh in every morning, after the toilet and before food.';
+    if (n.type === 'log-all') return 'Log everything for a week and look again.';
+    if (n.type === 'wait') return `Give it time: the weight verdict comes back on ${dateText(n.until)}.`;
+    if (n.type === 'hold-rising') return 'Hold a week and keep weighing. If it is still up, the stall choices apply.';
+    if (n.type === 'hold-slow') return 'Hold. If it is still slow in 2 weeks, we look at the stall choices.';
+    if (n.type === 'break-eat') return n.maintenance ? `Eat at about ${k(n.maintenance)} kcal for the break.` : 'Eat a few hundred kcal above your usual target for the break.';
     return n.cut
       ? `Pick one: cut ${k(n.cut.kcal)} kcal from carbs or fat, or add ${k(n.addSteps)} steps a day. Then give it 2 weeks before changing anything else.`
       : `Add ${k(n.addSteps)} steps a day, and give it 2 weeks. Your calories are already close to the floor.`;

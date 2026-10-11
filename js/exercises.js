@@ -67,6 +67,11 @@ export const MUSCLE = {
 };
 export const muscleOf = (id) => MUSCLE[String(id).split('~')[0]];
 
+// A lift's name from its id. A swapped lift's id is the original id, then '~', then its own name.
+const NAMES = Object.fromEntries(Object.values(sessions).flat().map((e) => [e.id, e.name]));
+export const liftName = (id) => NAMES[id]
+  ?? (String(id).includes('~') ? String(id).split('~')[1].replace(/-/g, ' ').replace(/^./, (ch) => ch.toUpperCase()) : String(id));
+
 // A lift your gym does not have can be swapped for another one (plan.swaps, set from the Workout
 // screen). The swap keeps the place, sets and reps, but gets its own id so its weights start fresh.
 export const KINDS = { barbell: 'Barbell or Smith machine', machine: 'Machine or cable', dumbbell: 'Dumbbells', body: 'Bodyweight' };

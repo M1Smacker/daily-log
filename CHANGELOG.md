@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.15.0
+
+The Coach's briefing, on Progress above the weekly card: the Coach's read of the whole week in four short parts.
+
+- **Where you are.** The phase and the day in it, your weight against where you started and where you are going, and the plan line when you are 1 kg or more off it.
+- **Going well.** Up to two things, and only ones the weekly card itself marks good. Praise that was said in the last two briefings rotates out.
+- **Fix.** One thing, always the weekly card's first action in plainer words. A fix that repeats says so ("Second week running"), and from the third week it gets shorter and blunter. When there is nothing to fix it says so and invents nothing.
+- **Next.** A phase starting, the diet break ending, a photo day, or when the next read is.
+- It changes once a week, on Thursday, and the line under it says which week it read and when the next read comes. A week with nothing new shrinks to a few lines.
+- It is at most 80 words, with no sentence over 20. It names at most two lifts.
+- Fixed rules and fixed sentences, each with two wordings that take turns by week. No AI, nothing stored: "said before" and "second week running" are found by running the same rules on the earlier weeks.
+
+The weekly card:
+
+- Every piece of advice is now an action on the card, never buried in the verdict's sentence. So the briefing's fix and the card's first action are always the same thing.
+- The order of actions: a calorie target set under 1,800, eating under the floor, losing too fast and the stall choice come first. Then the log. Then the verdict's own advice, sessions, lifts, protein and steps.
+- The numbers sit behind "Show the numbers", now that the briefing does the reading.
+- A calorie target set under 1,800 is an action of its own, and it shows from the first day.
+
+Fixed along the way:
+
+- A weekly rate was rounded twice, so 0.853% a week could show as 0.8 when it is 0.9. It is rounded once now, on the card and in the briefing.
+- More sessions than planned reads "5, with 4 planned", not "5 of 4".
+
+The diet break gets a rough calorie figure ("about 2,500"): your target plus the plan's deficit, lowered for the weight lost. It is an estimate and is always said as "about".
+
 ## 0.14.1
 
 An audit of the Coach and the rest of the app. Every fix below has a test that failed before it and passes now.

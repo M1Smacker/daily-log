@@ -81,6 +81,22 @@ export const LINES = Object.freeze({
   liftsDownWatch: 3,
 });
 
+// The Coach's briefing: how much it may say, and what has to be true before it says it.
+export const BRIEF = Object.freeze({
+  maxWords: 80, // the whole briefing
+  maxSentenceWords: 20,
+  caps: Object.freeze({ where: 3, well: 2, fix: 3, next: 2 }), // sentences. The fix may add a 1-sentence tail
+  liftNames: 2, // lift names in the whole briefing
+  planLineKg: 1.0, // the plan line is mentioned from this far off it
+  minLifts: 3, // repeated lifts before a lift sentence can speak
+  bigPictureEvery: 4, // completed weeks between "since the start" sentences
+  waistSinceDays: 14, // two waist readings at least this far apart for "since the start"
+  staleWeeks: 2, // praise shown in this many earlier briefings rotates out
+  foodDaysGood: 6, // food logged on this many days is worth saying
+  needsFoodDays: 5, // what a read needs after a week with gaps
+  needsWeighIns: 4,
+});
+
 // A rule can only suggest an action that keeps these. withinRails() is checked on every action
 // the week check returns, and a test proves it.
 export function withinRails(action) {

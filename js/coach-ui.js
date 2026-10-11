@@ -5,6 +5,9 @@ import * as rules from './rules.js';
 import * as coach from './coach.js';
 import { esc, shortDate } from './ui.js';
 import { say, LIFT_NOTE, dayName } from './coach-words.js';
+import { briefing } from './briefing.js';
+import { compose, LABELS } from './briefing-words.js';
+import { liftName } from './exercises.js';
 
 // One line. Level none is drawn plain and muted.
 export const coachLine = (item, ctx) => (item
@@ -20,22 +23,46 @@ export function liftLines(verdicts, ctx, after = '') {
 
 // ----- Feeding the Coach from the app's data -----
 
-export function coachWeek(c) {
+// What the week check and the briefing both read, from the app's data. One place, so the card
+// and the briefing above it can never be working from different numbers.
+function coachInput(c) {
   const p = c.profile;
-  const end = coach.weekEnd(c.key, c.plan.weekStartDow);
-  return coach.weekCheck({
+  return {
     key: c.key,
     days: c.data.days,
     T: c.targets.kcal,
     P: c.targets.protein,
     targets: { fibre: c.targets.fibre, waterMl: c.targets.waterMl },
     plan: {
-      start: c.plan.start, phases: c.plan.phases, steps: c.plan.steps, weekStartDow: c.plan.weekStartDow,
+      start: c.plan.start, end: c.plan.end, phases: c.plan.phases, steps: c.plan.steps, weekStartDow: c.plan.weekStartDow,
       sessionsPerWeek: Object.keys(c.plan.weekdays ?? {}).length || 4,
+      deficitKcal: c.plan.deficitKcal, photos: c.plan.photos, pushExtra: c.plan.pushExtra ?? [],
     },
     targetChangedOn: p?.targetChangedOn ?? null,
-    planLine: p ? rules.planWeight(end, c.plan, p.startKg, p.goalKg) : null,
-  });
+    startKg: p?.startKg ?? null,
+    goalKg: p?.goalKg ?? null,
+  };
+}
+
+export function coachWeek(c) {
+  const p = c.profile;
+  const end = coach.weekEnd(c.key, c.plan.weekStartDow);
+  return coach.weekCheck({ ...coachInput(c), planLine: p ? rules.planWeight(end, c.plan, p.startKg, p.goalKg) : null });
+}
+
+// The briefing: the Coach's read of the whole week in four short parts, above the card that
+// backs it. It changes once a week, and the caption says when.
+export function briefingCardHtml(c) {
+  const sel = briefing(coachInput(c));
+  const text = compose(sel, { lift: liftName });
+  const row = (part) => (text[part].length
+    ? `<div class="brief-row"><div class="coach-when">${LABELS[part]}</div><div class="brief-text">${esc(text[part].join(' '))}</div></div>` : '');
+  return `
+    <section class="card brief">
+      <span class="card-title">Coach's briefing</span>
+      ${row('where')}${row('well')}${row('fix')}${row('next')}
+      <div class="small muted">${esc(text.caption)}</div>
+    </section>`;
 }
 
 // A finished day. Null before the plan began.
@@ -71,15 +98,18 @@ export function weekCardHtml(c) {
   const w = coachWeek(c);
   const ctx = { T: c.targets.kcal };
   const verdict = `${coachLine(w.verdict, ctx)}${w.actions.map((a) => `<div class="coach-action">${esc(say(a, ctx))}</div>`).join('')}`;
-  const lines = w.lines.map((l) => coachLine(l, ctx)).join('');
+  // A target set under the floor is said out loud. The rest of the numbers are the evidence, and
+  // they sit behind one tap now that the briefing does the reading.
+  const loud = w.lines.filter((l) => l.code === 'F0').map((l) => coachLine(l, ctx)).join('');
+  const lines = w.lines.filter((l) => l.code !== 'F0').map((l) => coachLine(l, ctx)).join('');
   const sofar = w.soFar.days > 0
     ? `<div class="small muted">This week so far: ${w.soFar.sessions} session${w.soFar.sessions === 1 ? '' : 's'}, food logged enough on ${w.soFar.judgeable} of ${w.soFar.days} day${w.soFar.days === 1 ? '' : 's'}.</div>` : '';
   return `
     <section class="card">
       <span class="card-title">Coach, the week</span>
       ${w.week ? `<span class="card-tag">${range(w)}</span>` : ''}
-      <div class="coach-slot">${verdict}</div>
-      ${lines ? `<div class="coach-slot facts">${lines}</div>` : ''}
+      <div class="coach-slot">${verdict}${loud}</div>
+      ${lines ? `<details class="numbers"><summary class="link">Show the numbers</summary><div class="unfold"><div class="coach-slot facts">${lines}</div></div></details>` : ''}
       ${sofar}
       <div class="small muted">Fixed rules from your plan, worked out on the phone. It only reads what you logged, and it never changes your targets.</div>
     </section>`;

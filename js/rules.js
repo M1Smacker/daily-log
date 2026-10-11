@@ -430,6 +430,21 @@ export function withTargetDate(before, next, key) {
   return { ...clean, targetChangedOn: key, targetWas: sameDay ? before.targetWas : was };
 }
 
+// A rough maintenance figure for now: the target plus the plan's deficit, lowered for the weight
+// lost since the start, by the same 14 kcal a kg that finishKcal uses. Rounded to 10. It is an
+// estimate and is always shown as "about".
+export function maintenanceKcal(target, deficit, startKg, nowKg) {
+  if (![target, deficit, startKg, nowKg].every((n) => typeof n === 'number' && Number.isFinite(n))) return null;
+  return Math.round((target + deficit - KCAL_PER_KG * Math.max(0, startKg - nowKg)) / 10) * 10;
+}
+
+// The ISO week number of a day (weeks start on Monday, week 1 holds the year's first Thursday).
+export function isoWeek(key) {
+  const d = new Date(toMs(key));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
+  return Math.ceil(((d - Date.UTC(d.getUTCFullYear(), 0, 1)) / DAY + 1) / 7);
+}
+
 // True in the phase that follows a maintenance phase.
 export function afterBreak(key, phases) {
   const i = phases.indexOf(phaseFor(key, phases));

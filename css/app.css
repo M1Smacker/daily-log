@@ -559,6 +559,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .coach-line.lvl-none { color: var(--muted); border-left-color: var(--line); }
 .coach-action { font-size: 15px; line-height: 1.4; padding: 10px 12px; border-radius: 12px; background: var(--raised); }
 .coach-note { font-size: 12px; color: var(--muted); padding-left: 12px; }
+/* The briefing: four short parts, each under a small label, so it reads in seconds. */
+.brief-row { display: flex; flex-direction: column; gap: 4px; }
+.brief-row + .brief-row { border-top: 1px solid var(--line); padding-top: 12px; }
+.brief-text { font-size: 16px; line-height: 1.45; }
+.numbers > summary { list-style: none; cursor: pointer; }
+.numbers > summary::-webkit-details-marker { display: none; }
+.numbers[open] > summary { color: var(--muted); }
 .card.coach .link { align-self: flex-start; }
 .recap-row .coach-slot { padding-top: 2px; }
 .set-grid input {

@@ -215,7 +215,12 @@ test('week check: every day of a made-up plan, for many made-up people', () => {
         assert.doesNotMatch(text, /protein.*cut|cut.*protein/i);
       }
       // When the verdict is a watch with its own action, that action is first.
-      if (out.verdict.level === 'watch' && out.actions.some((a) => a.code === 'A2')) assert.equal(out.actions[0].code, 'A2');
+      // Safety and the stall choice go first: a target under the floor, then the verdict's own
+      // urgent action. Anything else waits behind the log.
+      if (T < RAILS.kcalFloor) assert.equal(out.actions[0]?.code, 'A0');
+      const urgent = out.actions.findIndex((a) => a.urgent);
+      if (urgent >= 0) assert.ok(urgent <= (T < RAILS.kcalFloor ? 1 : 0), `an urgent action sat at ${urgent}`);
+      if (['W1', 'W2', 'W8'].includes(out.verdict.code)) assert.ok(out.actions.some((a) => a.code === 'A2' && a.urgent) || T < RAILS.kcalFloor);
       const codes = out.lines.map((l) => l.code);
       assert.equal(new Set(codes).size, codes.length, 'the same line twice');
       for (const l of out.lines) {
