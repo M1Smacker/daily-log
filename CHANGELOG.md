@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.2
+
+- The sheet goes back to the plan's own sets: 2 to start, then the full sets on main lifts. The 3-sets choice from 0.12.1 is gone. A third set is added in the recap with "Add a set", and the app still reads it correctly.
+
 ## 0.12.1
 
 - The Foundation phase shows 3 sets on every lift, in the first week and after. The plan started with 2, and 3 is what is being done. Settings, Your gym, has a choice to go back to the plan's own sets. A minimum session is still 2 and a deload is still half.
