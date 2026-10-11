@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.12.1
+
+- The Foundation phase shows 3 sets on every lift, in the first week and after. The plan started with 2, and 3 is what is being done. Settings, Your gym, has a choice to go back to the plan's own sets. A minimum session is still 2 and a deload is still half.
+
 ## 0.12.0
 
 Workout recap:

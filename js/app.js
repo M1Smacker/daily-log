@@ -46,7 +46,7 @@ function guideBody(c) {
     p.name,
     `<p>${p.why}</p>
      <dl>
-       <dt>Sets</dt><dd>${p.sets}</dd>
+       <dt>Sets</dt><dd>${p.sets}${p.load === 'ramp' && c.plan.rampSets === 3 ? ' You have this phase set to 3 sets on every lift, in Settings.' : ''}</dd>
        <dt>Effort</dt><dd>${p.effort}</dd>
        <dt>Food</dt><dd>${p.food}</dd>
      </dl>`,

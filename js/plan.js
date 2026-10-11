@@ -68,6 +68,10 @@ export const plan = {
 
   steps: { from: 5000, weeklyAdd: 1000, target: 8000 },
 
+  // Sets on every lift through the Foundation phase. The research plan starts with 2, and the owner
+  // chose 3 from the first week on 11 Oct 2026. It can be changed in Settings, under Your gym.
+  rampSets: 3,
+
   // The dumbbells at the gym, lightest first. A dumbbell lift jumps to the next one up.
   dumbbells: [5, 7, 7.5, 8, 10, 12.5, 15, 17.5, 20],
 

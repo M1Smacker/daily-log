@@ -117,6 +117,13 @@ test('setsFor: Foundation ramps in, deload halves, minimum is 2', () => {
   assert.equal(r.setsFor(squat, phase('Deload'), '2026-12-11'), 2); // half of 3, rounded up
   assert.equal(r.setsFor({ sets: 2, main: true }, phase('Deload'), '2026-12-11'), 1);
   assert.equal(r.setsFor(squat, phase('Build'), '2026-11-01', true), 2); // minimum session
+  // Chosen: 3 on every lift through the Foundation phase, in week one and after, isolation included.
+  assert.equal(r.setsFor(curl, f, '2026-10-10', false, 3), 3);
+  assert.equal(r.setsFor({ sets: 2, main: false }, f, '2026-10-20', false, 3), 3);
+  assert.equal(r.setsFor(squat, f, '2026-10-10', true, 3), 2); // a minimum session stays 2
+  assert.equal(r.setsFor(squat, phase('Build'), '2026-11-01', false, 3), 3); // other phases are not touched
+  assert.equal(r.setsFor(squat, phase('Deload'), '2026-12-11', false, 3), 2);
+  assert.equal(r.setsFor(squat, f, '2026-10-10', false, 2), 2); // 2 is the plan as written
 });
 
 test('targetRir: follows the phase', () => {

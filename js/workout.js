@@ -51,7 +51,7 @@ function view() {
     if (phase?.load === 'half' && ['jump', 'extra', 'cap'].includes(p.type)) p = { type: 'hold', kg: p.kg, deload: true };
     return {
       ...ex, n: i + 1, last, p,
-      planned: rules.setsFor(ex, phase, key, w.minimum) + (extraSet(c, phase, sessionId, ex.base ?? ex.id, w.minimum) ? 1 : 0),
+      planned: rules.setsFor(ex, phase, key, w.minimum, c.plan.rampSets) + (extraSet(c, phase, sessionId, ex.base ?? ex.id, w.minimum) ? 1 : 0),
       target: p.type === 'jump' ? p.to : p.kg ?? null,
       entry: w.lifts?.[ex.id],
     };

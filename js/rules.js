@@ -141,6 +141,7 @@ export function planFrom(base, saved) {
       .filter(([, v]) => isMap(v) && typeof v.name === 'string' && typeof v.kind === 'string'));
   }
   if (isMap(s.gap)) plan.gap = s.gap;
+  if (s.rampSets === 2 || s.rampSets === 3) plan.rampSets = s.rampSets;
   if (Array.isArray(s.pushExtra)) plan.pushExtra = s.pushExtra.filter((m) => typeof m === 'string');
   for (const k of ['usdaKey', 'geminiKey']) if (typeof s[k] === 'string' && s[k]) plan[k] = s[k];
   if (s.finishAsked === true) plan.finishAsked = true;
@@ -160,10 +161,13 @@ export const MIN_EXERCISES = 3; // the minimum session is the first three lifts
 const MIN_SETS = 2;
 
 // How many sets to do today. ex: { sets, main }, phase: { load, start }.
-export function setsFor(ex, phase, key, minimum = false) {
+// rampSets: how many sets every lift gets through a ramp phase (the Foundation phase) when that is
+// more than the plan's own 2. A minimum session and a deload are not touched by it.
+export function setsFor(ex, phase, key, minimum = false, rampSets = MIN_SETS) {
   if (minimum) return Math.min(MIN_SETS, ex.sets);
   if (phase?.load === 'half') return Math.ceil(ex.sets / 2);
   if (phase?.load === 'ramp') {
+    if (rampSets > MIN_SETS) return rampSets;
     const firstWeek = diffDays(key, phase.start) < 7;
     return firstWeek || !ex.main ? Math.min(MIN_SETS, ex.sets) : ex.sets;
   }

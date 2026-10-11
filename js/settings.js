@@ -81,6 +81,13 @@ export function settingsBody() {
         <input name="dumbbells" type="text" autocomplete="off" value="${esc(c.plan.dumbbells.join(', '))}" required>
         <small>Every dumbbell weight your gym has, with a comma between each. Use a dot for halves, like 7.5. A dumbbell lift goes up to the next weight on this list.</small>
       </label>
+      <label class="field"><span>Sets in the Foundation phase</span>
+        <select name="rampSets">
+          <option value="3"${c.plan.rampSets === 3 ? ' selected' : ''}>3 on every lift</option>
+          <option value="2"${c.plan.rampSets === 3 ? '' : ' selected'}>As the plan says: 2 to start, then the full sets on main lifts</option>
+        </select>
+        <small>Only the Foundation phase. A minimum session is always 2, and a deload is half.</small>
+      </label>
       <div class="form-error" role="alert" hidden></div>
       <button class="btn">Save</button>
       ${Object.entries(c.plan.swaps ?? {}).map(([id, s]) => `
@@ -252,7 +259,7 @@ forms.profile = (fd, form) => {
 forms.gym = (fd) => {
   const dumbbells = rules.readDumbbells(fd.get('dumbbells'));
   if (!dumbbells) return 'Type at least two weights as numbers, like 5, 7.5, 10.';
-  store.setPlan({ dumbbells });
+  store.setPlan({ dumbbells, rampSets: fd.get('rampSets') === '2' ? 2 : 3 });
   return { done: 'Saved.' };
 };
 
