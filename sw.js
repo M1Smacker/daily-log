@@ -4,7 +4,7 @@
 // To release a change: bump VERSION here and in js/version.js. The app then shows
 // "Update available" and switches over when Refresh is tapped.
 
-const VERSION = '0.13.0';
+const VERSION = '0.14.0';
 const CACHE = `daily-log-${VERSION}`;
 const SDK_CACHE = 'firebase-sdk'; // versioned by its own URLs, so it survives app updates
 
@@ -15,6 +15,10 @@ const SHELL = [
   'manifest.webmanifest',
   'css/app.css',
   'js/app.js',
+  'js/coach-constants.js',
+  'js/coach-ui.js',
+  'js/coach-words.js',
+  'js/coach.js',
   'js/exercises.js',
   'js/firebase-config.js',
   'js/food.js',

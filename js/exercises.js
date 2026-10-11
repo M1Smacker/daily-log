@@ -53,6 +53,20 @@ export const sessions = {
   ],
 };
 
+// The muscle each lift works most directly. The Coach counts direct weekly sets with it. It is a
+// constant here, not stored data. A swapped lift keeps the muscle of the lift it replaced.
+export const MUSCLE = {
+  'lat-pulldown': 'lats', 'chest-supported-row': 'mid back', 'single-arm-row': 'lats', 'reverse-pec-deck': 'rear delts',
+  'smith-incline-press': 'chest', 'overhead-triceps': 'triceps', 'dip-machine': 'chest', 'lateral-raise': 'side delts',
+  'back-squat': 'quads', 'leg-press': 'quads', 'leg-extension': 'quads', 'leg-curl': 'hamstrings',
+  'standing-calf-raise': 'calves', 'ab-wheel': 'abs', 'reverse-crunch': 'abs',
+  'incline-db-press': 'chest', 'chest-press': 'chest', 'pec-deck': 'chest', 'cable-row': 'mid back',
+  'shoulder-press': 'front delts', 'incline-curl': 'biceps', 'hammer-curl': 'biceps', 'spider-curl': 'biceps',
+  'romanian-deadlift': 'hamstrings', 'split-squat': 'quads', 'hip-thrust': 'glutes',
+  'bent-knee-calf-raise': 'calves', 'cable-woodchop': 'abs', 'wrist-curl': 'forearms', 'shrug': 'traps',
+};
+export const muscleOf = (id) => MUSCLE[String(id).split('~')[0]];
+
 // A lift your gym does not have can be swapped for another one (plan.swaps, set from the Workout
 // screen). The swap keeps the place, sets and reps, but gets its own id so its weights start fresh.
 export const KINDS = { barbell: 'Barbell or Smith machine', machine: 'Machine or cable', dumbbell: 'Dumbbells', body: 'Bodyweight' };

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.14.0
+
+The Coach. It checks what you did against your plan, so you do not have to ask anyone. Fixed rules from your plan, worked out on the phone: no AI, no internet, no new data stored, and it only reads what you logged.
+
+- **After a lift.** Under "Log it" and in the recap, one line says whether the weight was right for the rep range. It judges your first set at the working weight, and it only promises a jump when the next sheet really will give one. It ends with "Judged from reps and weight only."
+- **Sets.** A note when you did more or fewer sets than the sheet asked for (one extra set is always fine), and when a Full session looks like a Minimum one.
+- **Yesterday's food, on Today.** Calories, protein and the fat floor against your targets, in at most two lines. A day with too little logged is not judged and is not counted. One day over target is never a worry. After 7 pm one protein reminder is allowed.
+- **The week, on Progress and Today.** Each Thursday: your weight trend over two weeks, food, protein, steps, sessions, lifts and waist, with one verdict and at most two things to do. It stays quiet for the first two weeks, the diet break and ten days after starting creatine, and says "not enough data yet" instead of guessing.
+- **Copy my data for Claude** now includes the Coach's rule codes, so a chat can check what the Coach said.
+- **Safety rails.** It never suggests under 1,800 kcal, more than 1 kg a week of loss, a fat target under 50 g, or cutting protein. A test checks this on hundreds of made-up weeks.
+
+Changed in the rules:
+
+- Only the planned sets decide whether the weight goes up. An extra tired set never holds it back, and a warm-up (under 70% of your heaviest set) never blocks a jump.
+- "Losing too fast" now means more than 1% of your bodyweight a week, and never more than 1 kg.
+- The app remembers one new thing: the day your calorie target last changed, so the Coach does not suggest a second cut before the first has had time to work.
+- The old Stall check card on Progress is replaced by the Coach's week check, which includes it.
+
 ## 0.13.0
 
 Logging a lift as you finish it, so nothing has to be remembered at the end:

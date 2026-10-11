@@ -245,7 +245,7 @@ forms.profile = (fd, form) => {
     form.querySelector('button.primary').textContent = 'Save anyway';
     return warnings.map(esc).join('<br>') + '<br>Tap Save anyway to keep these numbers, or change them.';
   }
-  store.setProfile(profile);
+  store.setProfile(rules.withTargetDate(ctx().profile, profile, ctx().key));
   if (location.hash === '#settings') return { done: 'Saved.' };
 };
 

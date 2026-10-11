@@ -7,6 +7,7 @@ import { ctx } from './state.js';
 import { sessions } from './exercises.js';
 import { logged, asSets } from './workout.js';
 import { esc, num, fmt, shortDate, litres, actions, forms, openSheet, field, readNumber } from './ui.js';
+import { weekCardHtml, coachCodes } from './coach-ui.js';
 
 const LIFT_NAMES = Object.fromEntries(Object.values(sessions).flat().map((e) => [e.id, e.name]));
 // A swapped lift's id is the original id, then '~', then the new name in lower case.
@@ -125,28 +126,6 @@ function phasesCard(c) {
             <i></i><span>${p.name}</span><small>${shortDate(p.start)} to ${p.end ? shortDate(p.end) : 'goal'}</small>
           </a>`).join('')}
       </div>
-    </section>`;
-}
-
-function stallCard(c) {
-  const s = rules.stallCheck(c.data.days, c.key, c.plan.start, c.plan.phases);
-  const atFloor = c.targets.kcal - rules.STALL_CUT_KCAL < rules.KCAL_FLOOR;
-  const text = {
-    'need-data': ['Needs more weigh-ins', 'It compares weekly averages, so it needs at least three weigh-ins a week for three weeks.'],
-    ok: ['On track', `Your average dropped ${s.drop} kg in the last week. Nothing to change.`],
-    fast: ['Losing too fast', `Your average dropped ${s.drop} kg in a week. More than 1 kg a week starts to eat muscle, so add ${rules.STALL_CUT_KCAL} kcal a day.`],
-    break: ['Holding steady, as planned', 'The scale is flat, and around the diet break that is what the plan asks for. Nothing to change. The check starts again three weeks after the break ends.'],
-    recomp: ['Probably recomposing', 'The scale is flat but your waist is shrinking. That usually means fat is going and muscle is coming. Leave everything alone for another week.'],
-    stall: ['Stalled for two weeks', (atFloor
-      ? `Your calories are already close to the ${num(rules.KCAL_FLOOR)} kcal floor, so add ${num(rules.STALL_ADD_STEPS)} steps a day.`
-      : `Cut ${rules.STALL_CUT_KCAL} kcal a day from carbs or fat, never protein, or add ${num(rules.STALL_ADD_STEPS)} steps a day.`)
-      + (s.waistKnown ? '' : ' Measure your waist too: if it is shrinking, you may just be recomposing.')],
-  }[s.status];
-  return `
-    <section class="card">
-      <span class="card-title">Stall check</span>
-      <div class="note${s.status === 'stall' || s.status === 'fast' ? ' warn' : ''}"><b>${text[0]}</b>${text[1]}</div>
-      <div class="small muted">It looks at your 7-day average each week. Flat for two weeks with no waist change is a stall. Losing more than 1 kg a week is too fast.</div>
     </section>`;
 }
 
@@ -273,7 +252,7 @@ export function progressBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   return weightCard(c) + `<div class="grid2">${waistCard(c)}${sessionsCard(c, days)}</div>` +
-    stallCard(c) + weekCard(c, days) + liftsCard(c) + phasesCard(c) + photosCard(c) + dataCard();
+    weekCardHtml(c) + weekCard(c, days) + liftsCard(c) + phasesCard(c) + photosCard(c) + dataCard();
 }
 
 // ----- Handlers -----
@@ -349,6 +328,7 @@ export function claudeText(c) {
     `Daily targets: ${t.kcal} kcal, ${t.protein} g protein, ${t.carbs} g carbs, ${t.fat} g fat, ${t.fibre} g fibre, ${litres(t.waterMl)} L water.`,
     `Weight: 7-day average ${avg ?? 'not enough weigh-ins yet'} kg, plan line says ${rules.planWeight(c.key, c.plan, p.startKg, p.goalKg)} kg.`,
     `Stall check: ${rules.stallCheck(c.data.days, c.key, c.plan.start, c.plan.phases).status}.`,
+    ...coachCodes(c).map((l) => `Coach (fixed rules, no AI), rule codes: ${l}`),
     '',
     'Plan rules: lose about 0.6 to 0.8 kg a week. Four sessions a week in the order Upper A, Lower A, Upper B, Lower B.',
     'Keep a weight until every set hits the top of the rep range, then make the smallest jump. A missed session stays next in line.',

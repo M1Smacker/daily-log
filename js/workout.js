@@ -14,8 +14,10 @@
 
 import * as rules from './rules.js';
 import * as store from './store.js';
+import * as coach from './coach.js';
 import { ui, ctx } from './state.js';
-import { sessions, withSwaps, altKind, KINDS } from './exercises.js';
+import { sessions, withSwaps, altKind, KINDS, muscleOf } from './exercises.js';
+import { coachLine, liftLines } from './coach-ui.js';
 import { esc, num, longDate, CHEVRON, TICK, actions, forms, app, closeSheet, field, readNumber } from './ui.js';
 
 const CARDIO = ['Easy bike', 'Bike intervals', 'Treadmill walk', 'Other'];
@@ -139,7 +141,7 @@ function sheetRow(v, ex) {
             <a class="btn compact" href="${video(ex.name)}" target="_blank" rel="noopener">Form video</a>
             <button type="button" class="btn compact" data-act="start-rest" data-sec="${ex.rest[1]}">Rest ${clock(ex.rest[1])}</button>
           </div>
-          ${logPart(ex)}
+          ${logPart(v, ex)}
           ${ex.note ? `<div class="muted" style="font-size:14px">${esc(ex.note)}</div>` : ''}
           ${reason(v, ex)}
           ${ex.alt ? `<div class="note"><b>If it is busy</b>${esc(ex.alt)}. <a class="link" href="${video(ex.alt.split(',')[0])}" target="_blank" rel="noopener">Form video for this</a></div>` : ''}
@@ -147,6 +149,20 @@ function sheetRow(v, ex) {
         </div></div>` : ''}
     </div>`;
 }
+
+// What the Coach says about one lift's weight: its verdict, the effort line, and L8 when the lift
+// has gone down two sessions running. The sets are the boxes on the sheet, or the saved sets in
+// the recap. Silent for the alternative, and for entries saved before sets were logged one by one.
+function coachVerdicts(v, ex, sets, alt = false) {
+  const verdicts = coach.liftCheck({
+    sets, lo: ex.reps[0], hi: ex.reps[1], kind: ex.kind, dumbbells: v.c.plan.dumbbells, planned: ex.planned,
+    effort: rules.targetRir(v.phase, v.key), firstTime: !ex.last, alt, hasAlt: Boolean(ex.alt),
+  });
+  const today = sets.length && !alt && !v.w.minimum && v.phase?.load !== 'half' ? [rules.bestSet(sets)] : [];
+  const back = coach.liftBackwards([...scores(v.c, ex.id, v.key), ...today]);
+  return back ? [...verdicts, back] : verdicts;
+}
+const coachFor = (v, ex, sets, alt, after = '') => liftLines(coachVerdicts(v, ex, sets, alt), {}, after);
 
 // Logging a lift as it is finished. What is in the boxes is what is saved: there is no draft and
 // no button, because this is done standing at the machine. The reps are one tap each.
@@ -156,7 +172,7 @@ const logSet = (ex, i, kg, reps) => setRow(ex, i, kg, reps) + `
     return `<button type="button" class="chip rep${on ? ' on' : ''}" data-act="rep-pick" data-set="${i}" data-n="${n}" aria-pressed="${on}" aria-label="Set ${i + 1}, ${n} reps">${n}</button>`;
   }).join('')}</div>`;
 
-function logPart(ex) {
+function logPart(v, ex) {
   const body = ex.kind === 'body';
   return `
     <div class="log" data-log="${ex.id}">
@@ -172,6 +188,7 @@ function logPart(ex) {
       </div>
       ${ex.alt ? `<label class="tick"><input type="checkbox" data-alt="${ex.id}" ${ex.entry?.alt ? 'checked' : ''}>Did the alternative</label>` : ''}
       <div class="small log-status" data-log-status role="status">${asSets(ex.entry).length ? 'Saved.' : ''}</div>
+      <div class="coach-slot" data-coach>${coachFor(v, ex, asSets(ex.entry), Boolean(ex.entry?.alt))}</div>
     </div>`;
 }
 
@@ -251,7 +268,7 @@ const setRow = (ex, i, kg, reps) => `
   <input type="text" inputmode="numeric" autocomplete="off" value="${esc(reps)}" data-f="reps" data-set="${i}" aria-label="${esc(ex.name)}, set ${i + 1}, reps">`;
 
 // One lift in the recap: a line per set, each with its own weight and reps.
-function recapRow(ex, draft) {
+function recapRow(v, ex, draft) {
   const body = ex.kind === 'body';
   const typedLift = draft?.lifts?.[ex.id];
   const alt = typedLift ? Boolean(typedLift.alt) : Boolean(ex.entry?.alt);
@@ -266,7 +283,31 @@ function recapRow(ex, draft) {
         <button type="button" class="link" data-act="add-set">Add a set</button>
         ${ex.alt ? `<label class="tick"><input type="checkbox" data-alt="${ex.id}" ${alt ? 'checked' : ''}>Did the alternative</label>` : ''}
       </div>
+      ${recapCoach(v, ex)}
     </div>`;
+}
+
+// Under a lift in the recap: the weight verdict and the sets verdict, from what was saved.
+function recapCoach(v, ex) {
+  const sets = asSets(ex.entry);
+  if (!sets.length || !Array.isArray(ex.entry.sets)) return ''; // nothing saved, or an older recap
+  const count = coach.setsCheck({
+    sets, planned: ex.entry.planned ?? ex.planned, load: v.phase?.load,
+    lastKg: ex.last ? rules.workingKg(ex.last.sets) : null,
+  }).map((x) => coachLine(x, {})).join('');
+  const all = coachFor(v, ex, sets, Boolean(ex.entry.alt), count);
+  return all ? `<div class="coach-slot">${all}</div>` : '';
+}
+
+// Above the recap: a Full session that looks like a Minimum one, and a muscle past the weekly ceiling.
+function sessionCoach(v) {
+  const first = rules.addDays(v.key, -((rules.weekday(v.key) - v.c.plan.weekStartDow + 7) % 7));
+  const counts = coach.weeklySets({ days: v.c.data.days, from: first, to: v.key, muscleOf });
+  const items = [
+    coach.sessionCheck({ minimum: v.w.minimum, finished: v.w.finished, counts: v.lifts.map((ex) => rules.workSets(asSets(ex.entry)).length) }),
+    coach.ceilingCheck(counts),
+  ].filter(Boolean);
+  return items.length ? `<div class="coach-slot">${items.map((x) => coachLine(x, {})).join('')}</div>` : '';
 }
 
 function cardioCard(v) {
@@ -346,7 +387,8 @@ export function workoutView() {
       <span class="card-title">Recap</span>
       <span class="card-tag">${filledIn} of ${v.lifts.length} saved</span>
       <div class="muted" style="font-size:14px">For each set: the weight you used and the reps you got. Did more sets than the sheet said? Add a set. Leave the reps empty for a set or a lift you skipped.</div>
-      <div>${v.lifts.map((ex) => recapRow(ex, draft)).join('')}</div>
+      ${sessionCoach(v)}
+      <div>${v.lifts.map((ex) => recapRow(v, ex, draft)).join('')}</div>
       <div class="small warn-ink" data-unsaved ${draft ? '' : 'hidden'}>Not saved yet. <button type="button" class="link" data-act="drop-recap">Throw these changes away</button></div>
       <button class="btn primary">Save recap</button>
       <div class="small muted">Nothing here is saved until you tap Save recap.</div>
@@ -385,7 +427,7 @@ document.addEventListener('input', (e) => {
   if (t.dataset?.f === 'kg') {
     const box = t.closest('[data-sets]');
     for (const later of box.querySelectorAll('[data-f="kg"]')) {
-      if (Number(later.dataset.set) > Number(t.dataset.set) && later.value === t.dataset.was) later.value = t.value;
+      if (Number(later.dataset.set) > Number(t.dataset.set) && later.value === (t.dataset.was ?? '')) later.value = t.value;
     }
     t.dataset.was = t.value;
   }
@@ -441,6 +483,8 @@ function saveLift(root) {
     put(v, w, true);
   }
   status.textContent = sets.length ? 'Saved.' : '';
+  const slot = root.querySelector('[data-coach]');
+  if (slot) slot.innerHTML = coachFor(v, ex, sets, alt);
   const lift = root.closest('.sheet-lift');
   const line = lift.querySelector('[data-logged]');
   lift.classList.toggle('logged', sets.length > 0);

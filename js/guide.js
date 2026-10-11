@@ -95,7 +95,20 @@ export const topics = [
         title: 'The pace',
         body: `
           <p>The aim is about 0.6 to 0.8 kg a week. In the research, people losing at that pace kept and even gained muscle, while people losing twice as fast did not.</p>
-          <p>Faster is not better here. If you are losing more than 1 kg a week after the first two weeks, the answer is to eat a little more.</p>`,
+          <p>Faster is not better here. If you are losing more than about 1% of your bodyweight a week (and never more than 1 kg) after the first two weeks, the answer is to eat a little more.</p>`,
+      },
+      {
+        title: 'The Coach',
+        body: `
+          <p>The Coach checks what you did against the plan, so you do not have to ask anyone. It uses fixed rules from your plan, worked out on your phone. There is no AI in it, it needs no internet, and it only reads what you logged.</p>
+          <ul>
+            <li><b>After a lift:</b> was the weight right for the rep range? It looks at your first set at the working weight. Too light says so and what comes next, too heavy says so too.</li>
+            <li><b>Sets:</b> a note when you did more or fewer sets than the sheet asked for. One extra set is always fine.</li>
+            <li><b>Each morning:</b> yesterday's food against your targets. A day with too little logged is not judged and not counted.</li>
+            <li><b>Each Thursday:</b> the week before. Your weight trend, food, sessions and lifts, with one verdict and at most two things to do.</li>
+          </ul>
+          <p>It cannot see your form, how hard a set felt, or food you did not log. For anything odd, use the Copy button on Progress and ask Claude.</p>
+          <p>It never suggests under 1,800 kcal, more than 1 kg a week of loss, or cutting protein.</p>`,
       },
       {
         title: 'The stall check',

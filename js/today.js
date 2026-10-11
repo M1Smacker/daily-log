@@ -3,6 +3,7 @@
 import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx } from './state.js';
+import { todayCardHtml } from './coach-ui.js';
 import {
   view, esc, num, fmt, shortDate, longDate, litres, DOW, TICK, CHEVRON,
   actions, forms, app, openSheet, closeSheet, fill, field, readNumber,
@@ -121,7 +122,7 @@ actions['finish-use'] = (el) => {
   const kcal = Number(el.dataset.kcal);
   // Never down to nothing: a carb target of zero would not load as a usable profile.
   const carbs = Math.max(20, Math.round(c.targets.carbs - (c.targets.kcal - kcal) / 4));
-  store.setProfile({ ...c.profile, targets: { ...c.targets, kcal, carbs } });
+  store.setProfile(rules.withTargetDate(c.profile, { ...c.profile, targets: { ...c.targets, kcal, carbs } }, c.key));
   store.setPlan({ finishAsked: true });
 };
 
@@ -243,19 +244,11 @@ function smallCards(c) {
     </div>`;
 }
 
-// The stall check lives on Progress. When it has something to say, Today points to it,
-// so a too-fast loss or a stall is not missed by someone who rarely opens that tab.
-function stallNudge(c) {
-  const s = rules.stallCheck(c.data.days, c.key, c.plan.start, c.plan.phases).status;
-  const text = { fast: 'You are losing faster than the plan wants.', stall: 'Your weight has been flat for two weeks.' }[s];
-  return text ? `<a class="note warn nudge" href="#progress"><b>Stall check</b>${text} See Progress for what to do.</a>` : '';
-}
-
 export function todayBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   const run = rules.missedRun(days, c.key);
-  return weekCard(c, days) + gapOffer(c, run) + finishOffer(c) + stallNudge(c) + nextSession(c, days, run) +
+  return weekCard(c, days) + gapOffer(c, run) + finishOffer(c) + todayCardHtml(c) + nextSession(c, days, run) +
     calories(c, rules.totals(c.day.food ?? [])) + smallCards(c) +
     '<div class="status" data-sync></div>';
 }

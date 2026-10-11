@@ -187,6 +187,20 @@ export function nextWeight(kind, kg, dumbbells) {
   return JUMP_KG[kind] ? kg + JUMP_KG[kind] : null;
 }
 
+// The step down from a weight: the next lighter dumbbell, or one jump less. Null when there is none.
+export function previousWeight(kind, kg, dumbbells) {
+  if (kind === 'dumbbell') return [...dumbbells].reverse().find((w) => w < kg) ?? null;
+  return JUMP_KG[kind] && kg - JUMP_KG[kind] > 0 ? kg - JUMP_KG[kind] : null;
+}
+
+// A set under 70% of the heaviest set of the lift is a warm-up. It is not work: it never blocks
+// a jump, and it is left out when sets are counted.
+export const WARMUP_SHARE = 0.7;
+export function workSets(sets) {
+  const top = Math.max(0, ...sets.map((s) => s.kg ?? 0));
+  return top > 0 ? sets.filter((s) => (s.kg ?? 0) >= WARMUP_SHARE * top) : sets;
+}
+
 // The jump rule (double progression). Keep the weight until every set reaches the top of
 // the rep range at the effort the phase asked for, then go up by the smallest jump.
 //   ex:   { kind, reps: [low, high] }
@@ -201,19 +215,23 @@ export function nextWeight(kind, kg, dumbbells) {
 //   { type: 'extra', kg, to, need }      the next step is big: reach `need` reps on every set first
 //   { type: 'cap', kg }                  earned, but there is nothing heavier: use the alternative
 export function progression(ex, last, dumbbells) {
-  const sets = (last?.sets ?? []).filter((s) => s.reps > 0);
-  if (!sets.length) return { type: 'start' };
+  const logged = (last?.sets ?? []).filter((s) => s.reps > 0);
+  if (!logged.length) return { type: 'start' };
   if (ex.kind === 'body') return { type: 'body' };
+  const sets = workSets(logged); // warm-ups are not work
   const kg = workingKg(sets);
   if (!(kg > 0)) return { type: 'start' };
 
   // When the sets were not all at one weight, the lift is judged at the weight most of them
   // were done with. A set at a heavier weight was harder than asked, so it counts as reached.
   // A lighter set does not: the weight stays until every set is done at it.
+  // Only the planned sets decide. A tired extra set is a bonus and never holds the weight back.
   const top = last.top ?? ex.reps[1];
-  const reached = (reps) => sets.every((s) => (s.kg ?? 0) > kg || ((s.kg ?? 0) === kg && s.reps >= reps));
-  const effortOk = sets.every((s) => s.rir == null || s.rir >= (last.rirLo ?? 0));
-  const earned = sets.length >= (last.planned ?? 1) && reached(top) && effortOk;
+  const planned = last.planned ?? 1;
+  const deciding = sets.slice(0, planned);
+  const reached = (reps) => deciding.every((s) => (s.kg ?? 0) > kg || ((s.kg ?? 0) === kg && s.reps >= reps));
+  const effortOk = deciding.every((s) => s.rir == null || s.rir >= (last.rirLo ?? 0));
+  const earned = sets.length >= planned && reached(top) && effortOk;
   if (!earned) return { type: 'hold', kg };
 
   const to = nextWeight(ex.kind, kg, dumbbells);
@@ -327,7 +345,8 @@ export function planWeight(key, plan, startKg, goalKg) {
 }
 
 const FLAT_KG = 0.1; // a weekly drop smaller than this counts as flat
-const FAST_KG = 1; // losing more than this a week is too fast
+const FAST_KG = 1; // losing more than this a week is too fast, whatever the bodyweight
+export const FAST_PCT = 1; // and so is more than this share of bodyweight a week
 const WAIST_CM = 0.5; // the smallest waist change worth trusting on a tape measure
 export const STALL_CUT_KCAL = 150;
 export const STALL_ADD_STEPS = 2000;
@@ -349,7 +368,7 @@ export function stallCheck(days, key, planStart, phases = []) {
   // The first two weeks of a deficit drop extra water: at the start, and again after a diet break.
   const water = diffDays(key, planStart) < 14
     || phases.some((p) => p.maintenance && p.end && key > p.end && diffDays(key, p.end) <= 14);
-  if (drop > FAST_KG && !water) return { status: 'fast', drop };
+  if ((drop > FAST_KG || (now > 0 && (drop / now) * 100 > FAST_PCT)) && !water) return { status: 'fast', drop };
   if (twoWeeksAgo === null) return { status: 'need-data' };
   const flat = drop < FLAT_KG && lastWeek > twoWeeksAgo - FLAT_KG;
   if (!flat) return { status: 'ok', drop };
@@ -374,6 +393,13 @@ export function finishKcal(kcal, startKg, nowKg) {
   const lost = Math.max(0, startKg - nowKg);
   return Math.max(Math.min(kcal, KCAL_FLOOR), Math.round((kcal - KCAL_PER_KG * lost) / 10) * 10);
 }
+// The profile with the date its calorie target last changed. Used when targets are saved.
+// A profile with no earlier one has no change to date, so nothing is added.
+export function withTargetDate(before, next, key) {
+  if (!before?.targets || before.targets.kcal === next.targets?.kcal) return { ...next, ...(before?.targetChangedOn ? { targetChangedOn: before.targetChangedOn } : {}) };
+  return { ...next, targetChangedOn: key };
+}
+
 // True in the phase that follows a maintenance phase.
 export function afterBreak(key, phases) {
   const i = phases.indexOf(phaseFor(key, phases));
