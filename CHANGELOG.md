@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.13.0
+
+Logging a lift as you finish it, so nothing has to be remembered at the end:
+
+- Tap a lift on the Workout sheet and there is a "Log it" part. Each set is one line with the weight already filled in. The reps are one tap each: a row of numbers around the lift's range. Type them instead if you got something outside it.
+- It saves the moment you tap or type. There is no Save button here, and "Saved." shows under the lift. A set that cannot be saved (reps but no weight) says so and leaves the last good save as it was.
+- The lift gets a tick and "Logged: ..." on the sheet, so you can see what is left.
+- "Same as last time" puts down exactly what the last session of that lift was. "Add a set" is there for a third set.
+- A weight typed into one set carries down to the sets after it that still held the old weight, the same as in the recap.
+- The recap after Full session or Minimum has what was logged already in it. Anything typed there is still kept until Save recap, as before.
+- "Did the alternative" is there too, for when a machine was busy.
+
 ## 0.12.2
 
 - The sheet goes back to the plan's own sets: 2 to start, then the full sets on main lifts. The 3-sets choice from 0.12.1 is gone. A third set is added in the recap with "Add a set", and the app still reads it correctly.

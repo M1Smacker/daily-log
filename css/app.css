@@ -533,6 +533,17 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .set-n { font: 700 20px/1 var(--display); color: var(--muted); text-align: center; }
 .recap-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .recap-foot .tick { font-size: 14px; }
+/* Logging a lift on the sheet as you go: the same set lines, with the reps one tap each. */
+.log { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.log-title { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.rep-chips { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 6px; }
+.chip.rep { min-width: 40px; min-height: 40px; padding: 0 8px; font-size: 16px; font-weight: 600; }
+.log-status { min-height: 18px; color: var(--muted); }
+.lift-n svg { display: none; }
+.sheet-lift.logged .lift-n { background: var(--accent); color: var(--on-accent); font-size: 0; }
+.sheet-lift.logged .lift-n svg { display: block; stroke-width: 2.6; }
+.logged-line { color: var(--text); }
+.logged-line[hidden] { display: none; }
 .set-grid input {
   width: 100%;
   min-width: 0;

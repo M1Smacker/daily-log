@@ -33,11 +33,12 @@ export const topics = [
       {
         title: 'Using the app at the gym',
         body: `
-          <p>Open the Workout tab once when you arrive. The session sheet shows every lift with today's weight, sets, reps and rest. Read it, or screenshot it, and put the phone away.</p>
+          <p>Open the Workout tab once when you arrive. The session sheet shows every lift with today's weight, sets, reps and rest.</p>
+          <p>When you finish a lift, tap it and log it while you still remember it. The weight is already filled in. Tap the reps you got for each set. It saves as you tap, and the lift gets a tick. If it was exactly what you did last time, "Same as last time" puts it all down in one tap. If the weight was different, change it in the box.</p>
           <p>When you are done, tap Full session or Minimum. That one tap marks the day.</p>
-          <p>Later, fill in the recap: for each lift, every set with the weight you used and the reps you got, then tap Save recap. If every set reached the top of the range, the next sheet shows a heavier weight.</p>
+          <p>The recap after it has everything you logged already in it. Fill in what you did not log, fix anything that is wrong, and tap Save recap. If every set reached the top of the range, the next sheet shows a heavier weight.</p>
           <p>Try to use one weight for all the sets of a lift. If you did change it, the app goes by the weight you did the most sets with. A heavier set counts as done. A lighter set means the weight stays for now.</p>
-          <p>Skip the recap and the day still counts. The app just cannot move your weights up without it.</p>`,
+          <p>Skip the logging and the recap and the day still counts. The app just cannot move your weights up without them.</p>`,
       },
       {
         title: 'Order and rest',

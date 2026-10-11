@@ -250,6 +250,42 @@ export function setsText(sets) {
     : sets.map((s) => `${s.kg ?? 0} kg x ${s.reps}`).join(', ');
 }
 
+// The rep counts offered as one-tap choices for a set: one under the range up to one over it.
+// Anything outside that is typed.
+export function repChoices([lo, hi]) {
+  const out = [];
+  for (let r = Math.max(1, lo - 1); r <= hi + 1; r++) out.push(r);
+  return out;
+}
+
+// Reads sets as they were typed: rows of { kg, reps } text, in order. A row with no reps was not
+// done and is left out. Returns the sets that are complete and the first row that cannot be
+// saved, as { n: its index, text: what is wrong }. A lift with no weight (body) needs only reps.
+export function setsFromRows(rows, body = false) {
+  const sets = [];
+  let problem = null;
+  const number = (text) => {
+    const n = typedNumber(text);
+    return n !== null && n <= 1000 ? n : null;
+  };
+  rows.forEach(({ kg, reps }, n) => {
+    if (String(reps ?? '').trim() === '') return;
+    const r = number(reps);
+    if (r === null || r < 1 || !Number.isInteger(r)) {
+      problem ??= { n, text: 'the reps need to be a whole number, 1 or more.' };
+      return;
+    }
+    if (body) { sets.push({ reps: r }); return; }
+    const w = number(kg);
+    if (!(w > 0)) {
+      problem ??= { n, text: 'type the weight you used.' };
+      return;
+    }
+    sets.push({ kg: w, reps: r });
+  });
+  return { sets, problem };
+}
+
 // A rough strength score for one session of a lift: the best set, as an estimated one-rep max.
 export const bestSet = (sets) =>
   Math.max(0, ...sets.filter((s) => s.reps > 0).map((s) => (s.kg ?? 0) * (1 + s.reps / 30)));

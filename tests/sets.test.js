@@ -61,3 +61,23 @@ test('bestSet: the strongest set of the day, whichever weight it was at', () => 
   assert.equal(r.bestSet([s(40, 8), s(35, 12)]), 40 * (1 + 8 / 30));
   assert.equal(r.bestSet([s(40, 5), s(35, 12)]), 35 * (1 + 12 / 30));
 });
+
+test('repChoices: one under the range up to one over it, never below 1', () => {
+  assert.deepEqual(r.repChoices([8, 12]), [7, 8, 9, 10, 11, 12, 13]);
+  assert.deepEqual(r.repChoices([1, 3]), [1, 2, 3, 4]);
+  assert.deepEqual(r.repChoices([5, 5]), [4, 5, 6]);
+});
+
+test('setsFromRows: skips sets with no reps, and names the first set it cannot save', () => {
+  const rows = (...x) => x.map(([kg, reps]) => ({ kg, reps }));
+  assert.deepEqual(r.setsFromRows(rows(['40', '10'], ['40', ''])), { sets: [{ kg: 40, reps: 10 }], problem: null });
+  assert.deepEqual(r.setsFromRows(rows(['40', '10'], ['35', '12'])).sets, [{ kg: 40, reps: 10 }, { kg: 35, reps: 12 }]);
+  assert.deepEqual(r.setsFromRows(rows(['40,5', '8'])).sets, [{ kg: 40.5, reps: 8 }]); // decimal comma
+  assert.deepEqual(r.setsFromRows(rows(['', '10'], ['40', '9'])), {
+    sets: [{ kg: 40, reps: 9 }], problem: { n: 0, text: 'type the weight you used.' } });
+  assert.equal(r.setsFromRows(rows(['40', '0'])).problem.n, 0);
+  assert.equal(r.setsFromRows(rows(['40', '8.5'])).problem.n, 0);
+  assert.equal(r.setsFromRows(rows(['40', '10'], ['40', 'abc'])).problem.n, 1);
+  assert.deepEqual(r.setsFromRows(rows(['', '12'], ['', '10']), true).sets, [{ reps: 12 }, { reps: 10 }]); // body
+  assert.deepEqual(r.setsFromRows([]), { sets: [], problem: null });
+});

@@ -1,8 +1,10 @@
 // The Workout screen, built for a phone that stays in the bag:
 //   1. On arrival: the session sheet. Every lift on one screen with today's weight. Nothing to tap.
+//      Each lift can be logged there as it is finished: tap the reps, and it saves as it is typed.
 //   2. Afterwards: one tap, "Full session" or "Minimum".
 //   3. Then the recap: per lift, every set with its weight and reps, saved with one button.
-//      That is what the jump rule sets next time's weights from.
+//      What was logged on the sheet is already in it. This is what the jump rule sets next
+//      time's weights from.
 //
 // A day's workout is stored as:
 //   { session, minimum, finished, rirLo, half, lifts: { [exerciseId]: { sets: [{ kg, reps }], alt, planned, top } } }
@@ -14,7 +16,7 @@ import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx } from './state.js';
 import { sessions, withSwaps, altKind, KINDS } from './exercises.js';
-import { esc, num, longDate, CHEVRON, actions, forms, app, closeSheet, field, readNumber } from './ui.js';
+import { esc, num, longDate, CHEVRON, TICK, actions, forms, app, closeSheet, field, readNumber } from './ui.js';
 
 const CARDIO = ['Easy bike', 'Bike intervals', 'Treadmill walk', 'Other'];
 const range = ([a, b], unit = '') => (a === b ? `${a}${unit}` : `${a} to ${b}${unit}`);
@@ -123,25 +125,53 @@ const targetText = (ex) =>
 function sheetRow(v, ex) {
   const open = ui.openLift === ex.id;
   const [big, small] = targetText(ex);
+  const done = asSets(ex.entry);
   return `
-    <div class="sheet-lift${open ? ' open' : ''}" id="lift-${ex.id}">
+    <div class="sheet-lift${open ? ' open' : ''}${done.length ? ' logged' : ''}" id="lift-${ex.id}">
       <button type="button" class="sheet-head" data-act="open-lift" data-ex="${ex.id}" aria-expanded="${open}">
-        <span class="lift-n">${ex.n}</span>
-        <span class="lift-text"><b>${esc(ex.name)}</b><small>${ex.planned} x ${range(ex.reps)}${ex.per ? ` ${ex.per}` : ''}, rest ${restText(ex.rest)}</small></span>
+        <span class="lift-n">${ex.n}${TICK}</span>
+        <span class="lift-text"><b>${esc(ex.name)}</b><small>${ex.planned} x ${range(ex.reps)}${ex.per ? ` ${ex.per}` : ''}, rest ${restText(ex.rest)}</small><small class="logged-line" data-logged${done.length ? '' : ' hidden'}>${done.length ? `Logged: ${rules.setsText(done)}` : ''}</small></span>
         <span class="target${ex.p.type === 'jump' ? ' up' : ''}"><b>${big}</b><small>${small}</small></span>
       </button>
       ${open ? `
         <div class="unfold${ui.fresh === ex.id ? ' fresh' : ''}"><div class="sheet-more">
-          ${ex.note ? `<div class="muted" style="font-size:14px">${esc(ex.note)}</div>` : ''}
-          ${ex.last ? `<div class="muted" style="font-size:14px">Last time: ${rules.setsText(ex.last.sets)}.</div>` : ''}
-          ${reason(v, ex)}
-          ${ex.alt ? `<div class="note"><b>If it is busy</b>${esc(ex.alt)}. <a class="link" href="${video(ex.alt.split(',')[0])}" target="_blank" rel="noopener">Form video for this</a></div>` : ''}
           <div class="pair">
             <a class="btn compact" href="${video(ex.name)}" target="_blank" rel="noopener">Form video</a>
             <button type="button" class="btn compact" data-act="start-rest" data-sec="${ex.rest[1]}">Rest ${clock(ex.rest[1])}</button>
           </div>
+          ${logPart(ex)}
+          ${ex.note ? `<div class="muted" style="font-size:14px">${esc(ex.note)}</div>` : ''}
+          ${reason(v, ex)}
+          ${ex.alt ? `<div class="note"><b>If it is busy</b>${esc(ex.alt)}. <a class="link" href="${video(ex.alt.split(',')[0])}" target="_blank" rel="noopener">Form video for this</a></div>` : ''}
           ${swapPart(ex)}
         </div></div>` : ''}
+    </div>`;
+}
+
+// Logging a lift as it is finished. What is in the boxes is what is saved: there is no draft and
+// no button, because this is done standing at the machine. The reps are one tap each.
+const logSet = (ex, i, kg, reps) => setRow(ex, i, kg, reps) + `
+  <div class="rep-chips" data-chips="${i}">${rules.repChoices(ex.reps).map((n) => {
+    const on = String(n) === String(reps).trim();
+    return `<button type="button" class="chip rep${on ? ' on' : ''}" data-act="rep-pick" data-set="${i}" data-n="${n}" aria-pressed="${on}" aria-label="Set ${i + 1}, ${n} reps">${n}</button>`;
+  }).join('')}</div>`;
+
+function logPart(ex) {
+  const body = ex.kind === 'body';
+  return `
+    <div class="log" data-log="${ex.id}">
+      <div class="log-title">Log it</div>
+      <div class="small muted">Done with this lift? Tap the reps you got for each set. It saves as you tap.${ex.last ? ` Last time: ${rules.setsText(ex.last.sets)}.` : ''}</div>
+      <div class="set-grid${body ? ' body' : ''}" data-sets="${ex.id}" data-kind="${ex.kind}" data-reps="${ex.reps.join(',')}" data-name="${esc(ex.name)}">
+        <span></span>${body ? '' : `<span class="set-h">${ex.kind === 'dumbbell' ? 'Kg each' : 'Kg'}</span>`}<span class="set-h">Reps</span>
+        ${rowsFor(ex, null).map(([kg, reps], i) => logSet(ex, i, kg, reps)).join('')}
+      </div>
+      <div class="recap-foot">
+        ${ex.last ? `<button type="button" class="link" data-act="same-as-last" data-ex="${ex.id}">Same as last time</button>` : '<span></span>'}
+        <button type="button" class="link" data-act="log-add-set">Add a set</button>
+      </div>
+      ${ex.alt ? `<label class="tick"><input type="checkbox" data-alt="${ex.id}" ${ex.entry?.alt ? 'checked' : ''}>Did the alternative</label>` : ''}
+      <div class="small log-status" data-log-status role="status">${asSets(ex.entry).length ? 'Saved.' : ''}</div>
     </div>`;
 }
 
@@ -301,7 +331,7 @@ export function workoutView() {
         ${v.w.minimum ? '' : '<button type="button" class="btn primary" data-act="finish-workout" data-minimum="false">Full session</button>'}
         <button type="button" class="btn${v.w.minimum ? ' primary' : ''}" data-act="finish-workout" data-minimum="true">Minimum</button>
       </div>
-      <div class="small muted">One tap marks the day. The recap after it takes a minute and can wait until you are home.</div>
+      <div class="small muted">One tap marks the day. The recap after it only needs what you did not log lift by lift, and it can wait until you are home.</div>
     </div>`;
 
   const filledIn = v.lifts.filter((ex) => logged(ex.entry)).length;
@@ -337,29 +367,113 @@ function current() {
   return { v, w: structuredClone(v.w) };
 }
 const put = (v, w, quiet = false) => store.setDay(v.key, { workout: w }, quiet);
-const typed = (s) => {
-  const n = rules.typedNumber(s);
-  return n !== null && n <= 1000 ? n : null;
-};
+// What is typed into one lift's boxes, as rows of text.
+const rowsOf = (box) => [...box.querySelectorAll('[data-f="reps"]')]
+  .map((r) => ({ kg: kgBox(box, r.dataset.set)?.value ?? '', reps: r.value }));
 
-// Typing in the recap only fills the draft. A weight typed into one set carries down to the sets
-// after it that still held the same weight, so a change of weight is typed once.
+// A weight typed into one set carries down to the sets after it that still held the same weight,
+// so a change of weight is typed once. Typing in the recap only fills the draft. Typing in the
+// log on the sheet saves the lift.
 document.addEventListener('focusin', (e) => {
   if (e.target.matches?.('[data-sets] [data-f="kg"]')) e.target.dataset.was = e.target.value;
 });
 document.addEventListener('input', (e) => {
-  const form = e.target.closest?.('[data-form="recap"]');
-  if (!form) return;
   const t = e.target;
-  if (t.dataset.f === 'kg') {
+  const form = t.closest?.('[data-form="recap"]');
+  const log = t.closest?.('[data-log]');
+  if (!form && !log) return;
+  if (t.dataset?.f === 'kg') {
     const box = t.closest('[data-sets]');
     for (const later of box.querySelectorAll('[data-f="kg"]')) {
       if (Number(later.dataset.set) > Number(t.dataset.set) && later.value === t.dataset.was) later.value = t.value;
     }
     t.dataset.was = t.value;
   }
-  keepDraft(form);
+  if (form) keepDraft(form);
+  else saveLift(log);
 });
+
+// ----- Logging a lift on the sheet -----
+
+// What was typed in the recap for this lift is older than what was just logged on the sheet.
+function forgetDraftLift(key, id) {
+  const d = draftFor(key);
+  if (!d?.lifts?.[id]) return;
+  delete d.lifts[id];
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* storage blocked */ }
+}
+
+// The chip for the reps that are in a set's box is lit.
+function syncChips(box) {
+  for (const r of box.querySelectorAll('[data-f="reps"]')) {
+    for (const chip of box.querySelectorAll(`[data-chips="${r.dataset.set}"] .chip`)) {
+      const on = chip.dataset.n === r.value.trim();
+      chip.classList.toggle('on', on);
+      chip.setAttribute('aria-pressed', on);
+    }
+  }
+}
+
+// Saves one lift from its boxes, without redrawing: the box being typed in keeps its focus.
+// A set with a problem leaves the last good save alone and says so, so a half-typed weight can
+// never wipe a lift that was saved properly a moment ago.
+function saveLift(root) {
+  const { v, w } = current();
+  const ex = v.lifts.find((l) => l.id === root.dataset.log);
+  if (!ex) return;
+  const box = root.querySelector('[data-sets]');
+  const status = root.querySelector('[data-log-status]');
+  syncChips(box);
+  const { sets, problem } = rules.setsFromRows(rowsOf(box), ex.kind === 'body');
+  status.classList.toggle('warn-ink', Boolean(problem));
+  if (problem) {
+    status.textContent = `Not saved yet. Set ${problem.n + 1}: ${problem.text}`;
+    return;
+  }
+  const alt = Boolean(root.querySelector('[data-alt]')?.checked);
+  // Keys in the order the database returns them, so a lift that did not change compares equal.
+  const next = sets.length ? { ...(alt ? { alt: true } : {}), planned: ex.planned, sets, top: ex.reps[1] } : null;
+  if (JSON.stringify(next) !== JSON.stringify(w.lifts?.[ex.id] ?? null)) {
+    w.lifts ??= {};
+    if (next) w.lifts[ex.id] = next;
+    else delete w.lifts[ex.id];
+    forgetDraftLift(v.key, ex.id);
+    put(v, w, true);
+  }
+  status.textContent = sets.length ? 'Saved.' : '';
+  const lift = root.closest('.sheet-lift');
+  const line = lift.querySelector('[data-logged]');
+  lift.classList.toggle('logged', sets.length > 0);
+  line.hidden = !sets.length;
+  line.textContent = sets.length ? `Logged: ${rules.setsText(sets)}` : '';
+}
+
+// One tap for the reps of a set. Tapping the lit one again clears it.
+actions['rep-pick'] = (el) => {
+  const input = el.closest('[data-log]').querySelector(`[data-f="reps"][data-set="${el.dataset.set}"]`);
+  input.value = input.value.trim() === el.dataset.n ? '' : el.dataset.n;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+};
+actions['log-add-set'] = (el) => {
+  const box = el.closest('[data-log]').querySelector('[data-sets]');
+  const n = box.querySelectorAll('[data-f="reps"]').length;
+  if (n >= MAX_SETS) return;
+  const ex = { kind: box.dataset.kind, name: box.dataset.name, reps: box.dataset.reps.split(',').map(Number) };
+  // The new set starts at the weight of the one before it. It is saved when it has reps.
+  box.insertAdjacentHTML('beforeend', logSet(ex, n, kgBox(box, n - 1)?.value ?? '', ''));
+};
+// Exactly what the last session of this lift was, put down for today. The boxes show it, so
+// anything that was not the same is corrected there.
+actions['same-as-last'] = (el) => {
+  const { v, w } = current();
+  const ex = v.lifts.find((l) => l.id === el.dataset.ex);
+  if (!ex?.last) return;
+  const sets = ex.last.sets.map((s) => (ex.kind === 'body' ? { reps: s.reps } : { kg: s.kg, reps: s.reps }));
+  w.lifts ??= {};
+  w.lifts[ex.id] = { planned: ex.planned, sets, top: ex.reps[1] };
+  forgetDraftLift(v.key, ex.id);
+  put(v, w);
+};
 
 actions['add-set'] = (el) => {
   const box = el.closest('.recap-row').querySelector('[data-sets]');
@@ -379,17 +493,8 @@ forms.recap = (fd, form) => {
   for (const ex of v.lifts) {
     const box = [...form.querySelectorAll('[data-sets]')].find((b) => b.dataset.sets === ex.id);
     if (!box) continue;
-    const sets = [];
-    for (const r of box.querySelectorAll('[data-f="reps"]')) {
-      if (r.value.trim() === '') continue; // a set that was not done
-      const at = `${ex.name}, set ${Number(r.dataset.set) + 1}`;
-      const reps = typed(r.value);
-      if (reps === null || reps < 1 || !Number.isInteger(reps)) return `${esc(at)}: the reps need to be a whole number, 1 or more.`;
-      if (ex.kind === 'body') { sets.push({ reps }); continue; }
-      const kg = typed(kgBox(box, r.dataset.set)?.value ?? '');
-      if (!(kg > 0)) return `${esc(at)}: type the weight you used.`;
-      sets.push({ kg, reps });
-    }
+    const { sets, problem } = rules.setsFromRows(rowsOf(box), ex.kind === 'body');
+    if (problem) return `${esc(`${ex.name}, set ${problem.n + 1}`)}: ${problem.text}`;
     const alt = Boolean(box.closest('.recap-row').querySelector('[data-alt]')?.checked);
     if (sets.length) lifts[ex.id] = { sets, planned: ex.planned, top: ex.reps[1], ...(alt ? { alt: true } : {}) };
     else delete lifts[ex.id];
