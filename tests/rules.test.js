@@ -379,3 +379,56 @@ test('planFrom: a saved dumbbell list is put in order, because the next weight u
   assert.deepEqual(saved.dumbbells, [5, 10, 12.5, 20]);
   assert.equal(r.nextWeight('dumbbell', 10, saved.dumbbells), 12.5);
 });
+
+// ----- A missed session, said out loud -----
+
+test('carriedOver: a missed gym day names the session and the day it lands on', () => {
+  // Tuesday 13 Oct was Lower B and nothing was logged. Today is Wednesday, a rest day.
+  const log = { '2026-10-08': { type: 'done', id: 'upperA' }, '2026-10-10': { type: 'done', id: 'lowerA' }, '2026-10-11': { type: 'done', id: 'upperB' } };
+  const days = sched('2026-10-14', log);
+  assert.deepEqual(r.carriedOver(days, '2026-10-14'), { session: 'lowerB', missedKeys: ['2026-10-13'], to: '2026-10-15' });
+  // Gym days and rest days keep their weekdays. Only the names slide along.
+  assert.deepEqual(
+    ['2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19', '2026-10-20'].map((k) => [on(days, k).state, on(days, k).session]),
+    [['planned', 'lowerB'], ['rest', null], ['planned', 'upperA'], ['planned', 'lowerA'], ['rest', null], ['planned', 'upperB']],
+  );
+});
+
+test('carriedOver: nothing waiting when the last gym day was done, or when nothing has been missed', () => {
+  const log = { '2026-10-08': { type: 'done', id: 'upperA' } };
+  assert.equal(r.carriedOver(sched('2026-10-09', log), '2026-10-09'), null);
+  const done = { ...log, '2026-10-10': { type: 'min', id: 'lowerA' } };
+  assert.equal(r.carriedOver(sched('2026-10-11', done), '2026-10-11'), null);
+});
+
+test('carriedOver: a day marked missed today moves on at once, and clearing the mark brings it back', () => {
+  const log = { '2026-10-08': { type: 'done', id: 'upperA' }, '2026-10-10': { type: 'missed' } };
+  const days = sched('2026-10-10', log);
+  assert.deepEqual(r.carriedOver(days, '2026-10-10'), { session: 'lowerA', missedKeys: ['2026-10-10'], to: '2026-10-11' });
+  assert.equal(r.carriedOver(sched('2026-10-10', { '2026-10-08': log['2026-10-08'] }), '2026-10-10'), null);
+});
+
+test('carriedOver: two in a row are both named, and it is still one session', () => {
+  const days = sched('2026-10-12', { '2026-10-08': { type: 'done', id: 'upperA' } });
+  assert.deepEqual(r.carriedOver(days, '2026-10-12'), { session: 'lowerA', missedKeys: ['2026-10-10', '2026-10-11'], to: '2026-10-13' });
+});
+
+test('unfinishedDays: lifts logged on a day that was never marked are found, nothing else is', () => {
+  const lift = { sets: [{ kg: 40, reps: 10 }] };
+  const days = {
+    '2026-10-13': { workout: { session: 'lowerB', lifts: { a: lift, b: lift, c: { sets: [{ kg: 40, reps: 0 }] } } } },
+    '2026-10-12': { workout: { session: 'upperB', lifts: { a: lift } } }, // marked done below
+    '2026-10-11': { workout: { session: 'upperB', lifts: {} } }, // opened, nothing logged
+    '2026-10-14': { workout: { session: 'lowerB', lifts: { a: lift } } }, // today is still going
+  };
+  const log = { '2026-10-12': { type: 'done' } };
+  assert.deepEqual(r.unfinishedDays(days, log, '2026-10-14'), [{ key: '2026-10-13', lifts: 2, session: 'lowerB' }]);
+  assert.deepEqual(r.unfinishedDays(days, { ...log, '2026-10-13': { type: 'missed' } }, '2026-10-14'), []); // an answer is an answer
+  assert.deepEqual(r.unfinishedDays({ '2026-10-13': { workout: { lifts: 'junk' } }, '2026-10-12': null }, {}, '2026-10-14'), []);
+});
+
+test('weighInsThisWeek: counts mornings with a weight since Thursday, today included', () => {
+  const days = { '2026-10-08': { weightKg: 90 }, '2026-10-10': { weightKg: 89.6 }, '2026-10-13': { weightKg: 0 }, '2026-10-14': { weightKg: 89.1 }, '2026-10-15': { weightKg: 88.9 } };
+  assert.equal(r.weighInsThisWeek(days, '2026-10-14', 4), 3); // Thu 8 to Wed 14: three real weights
+  assert.equal(r.weighInsThisWeek(days, '2026-10-15', 4), 1); // a new week begins on Thursday
+});

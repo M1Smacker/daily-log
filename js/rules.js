@@ -91,6 +91,42 @@ export function missedRun(days, key) {
   return { count, firstKey };
 }
 
+// The missed session that is still waiting, and the day it lands on. A missed session never
+// doubles up: it stays next in line and takes the next gym day. Gym days and rest days keep
+// their weekdays, only the names move along. null when nothing is waiting.
+export function carriedOver(days, key) {
+  const run = missedRun(days, key);
+  const next = nextUp(days, key);
+  if (!run.count || !next) return null;
+  const missedKeys = days.filter((d) => d.key >= run.firstKey && d.key <= key && d.state === 'missed').map((d) => d.key);
+  return { session: next.session, missedKeys, to: next.key };
+}
+
+// Days in the last `span` where lifts were logged but the session was never marked done, minimum
+// or missed. They read as missed (or as a rest day), which is not what happened. Today is left
+// alone, it is still going. Days is the stored days, log is the marks from schedule().
+export function unfinishedDays(days, log, key, span = 7) {
+  const out = [];
+  for (let i = 1; i <= span; i++) {
+    const k = addDays(key, -i);
+    const w = days?.[k]?.workout;
+    if (log[k] || !w || typeof w.lifts !== 'object' || w.lifts === null) continue;
+    const lifts = Object.values(w.lifts).filter((l) => setsOf(l).length > 0).length;
+    if (lifts) out.push({ key: k, lifts, session: typeof w.session === 'string' ? w.session : null });
+  }
+  return out;
+}
+
+// Mornings with a weight so far in the week that holds key, today included.
+export function weighInsThisWeek(days, key, weekStartDow) {
+  let n = 0;
+  for (let k = addDays(key, -((weekday(key) - weekStartDow + 7) % 7)); k <= key; k = addDays(k, 1)) {
+    const kg = Number(days?.[k]?.weightKg);
+    if (Number.isFinite(kg) && kg > 0) n++;
+  }
+  return n;
+}
+
 // Push the current phase's end and every later phase back by n days. Finished phases stay.
 export function shiftPhases(phases, key, n) {
   return phases.map((p) => {

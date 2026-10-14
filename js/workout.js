@@ -36,12 +36,16 @@ function view() {
   const key = ui.workoutDay ?? c.key;
   const days = rules.schedule(c.plan, c.log, c.key);
   const saved = c.data.days[key]?.workout;
-  const sessionId = saved?.session ?? days.find((d) => d.key === key)?.session ?? rules.nextUp(days, c.key)?.session;
-  if (!sessions[sessionId]) return null;
-  const phase = rules.phaseFor(key, c.plan.phases);
   const mark = c.log[key]?.type;
   const marked = mark === 'done' || mark === 'min';
-  const w = saved ?? {
+  // A session picked with "Do a different session" counts until a lift is logged or the day is
+  // marked. After that the day is that session, whatever was picked.
+  const lockedIn = Boolean(saved) && (marked || Object.values(saved.lifts ?? {}).some(logged));
+  const pick = !lockedIn && ui.pick?.key === key && sessions[ui.pick.id] ? ui.pick.id : null;
+  const sessionId = pick ?? saved?.session ?? days.find((d) => d.key === key)?.session ?? rules.nextUp(days, c.key)?.session;
+  if (!sessions[sessionId]) return null;
+  const phase = rules.phaseFor(key, c.plan.phases);
+  const w = saved ? { ...saved, session: sessionId } : {
     session: sessionId, minimum: marked ? mark === 'min' : Boolean(ui.wantMinimum), finished: marked,
     rirLo: rules.targetRir(phase, key)[0], half: phase?.load === 'half', lifts: {},
   };
@@ -598,6 +602,7 @@ actions['workout-today'] = () => { ui.workoutDay = null; ui.openLift = null; ui.
 // From Today and from the day sheet.
 actions['start-workout'] = (el) => {
   ui.workoutDay = el.dataset.day ?? null;
+  ui.pick = el.dataset.session ? { key: ui.workoutDay ?? ctx().key, id: el.dataset.session } : null;
   ui.wantMinimum = el.dataset.minimum === 'true';
   ui.openLift = null;
   closeSheet();

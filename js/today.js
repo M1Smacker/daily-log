@@ -4,6 +4,7 @@ import * as rules from './rules.js';
 import * as store from './store.js';
 import { ui, ctx } from './state.js';
 import { todayCardHtml } from './coach-ui.js';
+import { WEEK } from './coach-constants.js';
 import {
   view, esc, num, fmt, shortDate, longDate, litres, DOW, TICK, CHEVRON,
   actions, forms, app, openSheet, closeSheet, fill, field, readNumber,
@@ -126,6 +127,71 @@ actions['finish-use'] = (el) => {
   store.setPlan({ finishAsked: true });
 };
 
+// The session chosen for today with "Do a different session", or the one already started today.
+function pickedToday(c) {
+  const id = ui.pick?.key === c.key ? ui.pick.id : c.data.days[c.key]?.workout?.session;
+  return c.plan.sessions[id] ? id : null;
+}
+
+// A missed session, said where it will be seen: which one, which day it was, which day it is on
+// now, and that the weekdays did not change. Only the names move along.
+function carriedNote(c, days) {
+  const carry = rules.carriedOver(days, c.key);
+  if (!carry) return '';
+  const name = esc(c.plan.sessions[carry.session].name);
+  const dayOf = (k) => (k === c.key ? 'today' : fmt(k, { weekday: 'long', day: 'numeric', month: 'short' }));
+  const was = carry.missedKeys.map(dayOf);
+  const list = was.length > 3 ? `${was.length} times, since ${was[0]}`
+    : was.length > 1 ? `${was.slice(0, -1).join(', ')} and ${was.at(-1)}` : was[0];
+  const to = carry.to === c.key ? 'today' : fmt(carry.to, { weekday: 'long' });
+  const marked = c.log[c.key]?.type === 'missed';
+  return `
+    <div class="note warn"><b>${name} was missed ${list}</b>
+      It is on ${to} now. Gym days and rest days stay on the same weekdays, only the session names move along. Nothing doubles up.
+      ${marked ? '<button type="button" class="btn compact quiet" data-act="mark-today" data-type="clear">Undo, I am training today</button>' : ''}
+    </div>`;
+}
+
+// Lifts were logged on a day that was never finished, so the app reads it as missed. Ask, once.
+function unfinishedCards(c) {
+  return rules.unfinishedDays(c.data.days, c.log, c.key).slice(0, 2).map((u) => {
+    const s = u.session && c.plan.sessions[u.session];
+    const whole = Boolean(s) && u.lifts >= s.exercises;
+    return `
+    <section class="card raised">
+      <div class="card-title">${longDate(u.key)}: not finished</div>
+      <div class="muted" style="font-size:14px">You logged ${u.lifts} ${u.lifts === 1 ? 'lift' : 'lifts'}${s ? ` of ${esc(s.name)}` : ''} but never tapped Full session or Minimum, so the app counts that day as missed. What was it?</div>
+      <div class="pair">
+        <button type="button" class="btn primary" data-act="set-day" data-type="${whole ? 'done' : 'min'}" data-day="${u.key}">${whole ? 'Count it as done' : 'Count it as a minimum session'}</button>
+        <button type="button" class="btn" data-act="set-day" data-type="missed" data-day="${u.key}">Leave it as missed</button>
+      </div>
+    </section>`;
+  }).join('');
+}
+
+// The morning weigh-in, at the top, with the box right there. It is the one daily number the
+// Coach cannot work without, and a card at the bottom of the page was easy to walk past.
+function weighInCard(c) {
+  if (c.day.weightKg != null) return '';
+  const hour = new Date().getHours();
+  const morning = hour >= c.plan.rolloverHour && hour < 12;
+  const n = rules.weighInsThisWeek(c.data.days, c.key, c.plan.weekStartDow);
+  const need = `Weigh-ins this week: ${n}. A week's average needs ${WEEK.weighIns} mornings.`;
+  if (!morning) {
+    return `<div class="note"><b>No weigh-in yet today</b>A weight after food does not compare with the morning ones, so the next one is tomorrow morning. ${need}</div>`;
+  }
+  return `
+    <section class="card raised weigh">
+      <span class="card-title">Weigh in now</span>
+      <div class="muted" style="font-size:14px">After the toilet, before any food or water, same scale.</div>
+      <form class="weigh-form" data-form="weight" novalidate>
+        ${field('value', 'Weight', '', { unit: 'kg' })}
+        <button class="btn primary">Save weight</button>
+      </form>
+      <div class="small muted">${need}</div>
+    </section>`;
+}
+
 function nextSession(c, days, run) {
   const todayDay = days.find((d) => d.key === c.key);
   const next = rules.nextUp(days, c.key);
@@ -154,9 +220,16 @@ function nextSession(c, days, run) {
       </section>`;
   }
   if (!next) return '';
-  const s = c.plan.sessions[next.session];
+  // A session picked for today (or already started today) is the one the card shows.
+  const picked = next.key === c.key ? pickedToday(c) : null;
+  const shown = picked ?? next.session;
+  const s = c.plan.sessions[shown];
   const when = next.key === c.key ? 'today' : fmt(next.key, { weekday: 'long' });
-  return `
+  const restDay = todayDay?.state === 'rest';
+  const after = c.plan.cycle[(c.plan.cycle.indexOf(next.session) + 1) % c.plan.cycle.length];
+  const lockedIn = Object.values(c.data.days[c.key]?.workout?.lifts ?? {}).some((l) => rules.setsOf(l).length > 0);
+  const pick = picked ? ` data-session="${picked}"` : '';
+  return carriedNote(c, days) + `
     <section class="card ticket">
       <div class="ticket-top">
         <span class="eyebrow">Next session, ${when}</span>
@@ -168,12 +241,16 @@ function nextSession(c, days, run) {
         <div><b>${s.exercises}</b><span>Exercises</span></div>
         <div><b>${s.minutes}</b><span>Minutes</span></div>
       </div>
+      ${picked && picked !== next.session ? `<div class="small muted">You picked this one. ${esc(c.plan.sessions[next.session].name)} comes round again after the others.</div>` : ''}
       ${run.count >= 2 ? '<div class="note">The last two sessions were missed. A minimum session counts in full.</div>' : ''}
+      ${restDay ? `<div class="note">Today is a rest day. If you train anyway it takes ${esc(c.plan.sessions[next.session].name)}, and ${fmt(next.key, { weekday: 'long' })} moves up to ${esc(c.plan.sessions[after].name)}.</div>` : ''}
       <div class="tear"></div>
       <div class="pair">
-        <button type="button" class="btn primary" data-act="start-workout">Start session</button>
-        <button type="button" class="btn" data-act="start-workout" data-minimum="true">Minimum</button>
+        <button type="button" class="btn primary" data-act="start-workout"${pick}>Start session</button>
+        <button type="button" class="btn" data-act="start-workout" data-minimum="true"${pick}>Minimum</button>
       </div>
+      ${next.key === c.key && !lockedIn ? '<button type="button" class="btn quiet" data-act="mark-today" data-type="missed">Not training today</button>' : ''}
+      ${lockedIn ? '' : '<button type="button" class="link" data-act="pick-session">Do a different session</button>'}
       <div class="small muted">A missed day never doubles up. The same session just stays next in line.</div>
     </section>`;
 }
@@ -250,7 +327,7 @@ export function todayBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   const run = rules.missedRun(days, c.key);
-  return weekCard(c, days) + gapOffer(c, run) + finishOffer(c) + todayCardHtml(c) + nextSession(c, days, run) +
+  return weighInCard(c) + weekCard(c, days) + unfinishedCards(c) + gapOffer(c, run) + finishOffer(c) + todayCardHtml(c) + nextSession(c, days, run) +
     calories(c, rules.totals(c.day.food ?? [])) + smallCards(c) +
     '<div class="status" data-sync></div>';
 }
@@ -306,6 +383,22 @@ actions['open-day'] = (el) => {
         </div>` : '<div class="small muted">Training on a rest day takes the next session in line.</div>'}
       ${c.log[k] ? `<button type="button" class="btn" data-act="set-day" data-type="clear" data-day="${k}">Clear this mark</button>` : ''}
       <button type="button" class="btn quiet" data-act="close-sheet">Close</button>
+    </div>`);
+};
+
+actions['pick-session'] = () => {
+  const c = ctx();
+  const next = rules.nextUp(rules.schedule(c.plan, c.log, c.key), c.key);
+  openSheet(`
+    <div class="sheet-body">
+      <div>
+        <div class="card-title">Which session?</div>
+        <div class="muted" style="font-size:14px">The plan carries on from the one you pick, and the others come round again in order.</div>
+      </div>
+      ${c.plan.cycle.map((id) => `
+        <button type="button" class="btn${id === next?.session ? ' primary' : ''}" data-act="start-workout" data-session="${id}">${esc(c.plan.sessions[id].name)}${id === next?.session ? ' (next in line)' : ''}</button>
+        <div class="small muted" style="margin-top:-4px">${esc(c.plan.sessions[id].about)}</div>`).join('')}
+      <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
     </div>`);
 };
 

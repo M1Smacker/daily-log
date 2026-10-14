@@ -505,6 +505,9 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 }
 .note b { display: block; margin-bottom: 2px; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
 .note.warn { border-left: 2px solid var(--amber); }
+.note .btn { margin-top: 10px; }
+/* The weigh-in card: the box and the button stacked, so both are easy to hit with a thumb. */
+.weigh-form { display: flex; flex-direction: column; gap: 10px; }
 /* A link in a note sits on its own line: its tall tap area would push the lines of text apart. */
 .note .link { display: flex; }
 .note .tick { margin-top: 6px; }

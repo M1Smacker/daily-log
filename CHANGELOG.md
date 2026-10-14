@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.16.0
+
+A missed session, and the morning weigh-in, said where you will see them.
+
+- **A missed session is named.** When a gym day passes with nothing marked, Today shows a note above the session card: which session it was, which day it was, which day it is on now, and that gym days and rest days stay on the same weekdays. Only the session names move along.
+- **"Not training today".** A button on the session card on a gym day. It moves the app on at once, and the note has an Undo.
+- **"Do a different session".** Pick any of the four sessions for today instead of the one next in line. The plan carries on from your pick, and the one you skipped comes round again after the others. It uses the session already stored with each workout, so nothing new is saved.
+- **A rest day says what training would do.** The card now says that training on a rest day takes the next session and moves the next gym day up.
+- **Unfinished days are asked about.** Lifts logged on a day that was never marked Full session or Minimum used to read as a missed day. Now the next morning's Today asks what it was: count it, or leave it as missed. It never counts it for you.
+- **The weigh-in is at the top of Today** until you have weighed in, with the box right there, and says how many mornings this week have a weight against the 4 a week's average needs. After midday it becomes a plain note instead.
+- The guide says all of this in the Missed days and Weighing in topics, including that the app cannot ring you when it is closed, so a phone alarm is the reminder.
+
 ## 0.15.0
 
 The Coach's briefing, on Progress above the weekly card: the Coach's read of the whole week in four short parts.

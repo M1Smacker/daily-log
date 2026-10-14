@@ -68,7 +68,10 @@ export const topics = [
       {
         title: 'Missed days',
         body: `
-          <p>A missed day never doubles up. The session you missed stays next in line, and everything after it moves along by one.</p>
+          <p>A gym day with nothing marked counts as missed by itself once the day is over. You do not have to mark it. On the day, "Not training today" on the session card moves the app on straight away, and Undo puts it back.</p>
+          <p>A missed day never doubles up. The session you missed stays next in line and takes the next gym day. Gym days and rest days stay on the same weekdays, only the session names move along. The session card says which session it was and which day it is on now.</p>
+          <p>If you train on a rest day, it takes the next session in line and the gym day after it moves up. "Do a different session" lets you pick another one. The plan carries on from your pick, and the one you skipped comes round again after the others.</p>
+          <p>If you logged lifts and never tapped Full session or Minimum, the app reads the day as missed. The next morning it asks you what it was, and you decide. It never counts it for you.</p>
           <p>One missed session changes nothing. Two in a row is how people fall off, so after two misses the minimum session is the thing to aim for.</p>
           <p>If you miss four in a row, the app offers to push every phase back a week so the plan picks up where you stopped.</p>`,
       },
@@ -87,6 +90,8 @@ export const topics = [
         title: 'Weighing in',
         body: `
           <p>Weigh yourself in the morning, after the toilet and before any food or water, on the same scale.</p>
+          <p>Until you have weighed in, the card at the top of Today has the box right there. The Coach needs 4 mornings in a week to give a weight average.</p>
+          <p>The app cannot ring or buzz you when it is closed, because a phone only does that for apps with a server behind them. Set an alarm on your phone called "Weigh in" for when you get up, so the scale comes before breakfast.</p>
           <p>One day means nothing. Salt, a late meal or a hard session can move the scale by a kilo. The app uses your 7-day average, so judge progress week to week.</p>
           <p>The first week or two usually drops an extra 1 to 1.5 kg. That is water and food in your gut, not fat, and it is normal.</p>
           <p>Measure your waist once a week, same morning, at the belly button, relaxed, after breathing out.</p>`,
