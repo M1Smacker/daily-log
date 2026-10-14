@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.17.0
+
+The rules the app was applying in silence now say so on the screen where they apply.
+
+Two of them were mistakes, not just quiet ones:
+
+- **The weekly pace was typed into a sentence.** The weight card always read "about 0.6 to 0.8 kg a week" whatever the goal and end date said. It is worked out now (`rules.planPace`), over the days that are not a maintenance phase, and the Claude export uses the same figure.
+- **Two weigh-in counts looked like a contradiction.** The weight card needs 3 mornings in 7 days for an average, the Coach needs 4 inside the week. Both are real, and each now says which is which.
+
+Said out loud:
+
+- **Warm-ups.** The log on the session sheet says a light set before your first proper set is kept but never counted for or against the next weight, and that a lighter set after the work has started does count.
+- **The day turns over at 4 am.** Between midnight and the rollover the header says "Still, until 4 am". A session running up to it is warned that later sets land on the new day.
+- **The step target.** The Steps card says it rises every week, by how much, and where it stops.
+- **A quiet spell on the scale.** The weigh-in card names the date the Coach starts reading your weight, from the Coach's own clear day, and says to keep weighing in meanwhile.
+- **Editing a saved food.** The edit form says meals already logged keep the numbers they were logged with.
+- **What makes a day count.** Food says a day joins the weekly averages at 1,200 kcal and 2 meals, with where the day stands.
+- **The week's days.** Today's strip and the Progress sessions card say the week runs Thursday to Wednesday.
+- **The plan line.** The chart legend says it goes flat in the diet break.
+- **The Coach's limits.** The weekly card says it never goes under 1,800 kcal, never more than 1 kg a week, never less protein.
+- **Something waiting to sync** shows at the top of every screen, not only at the foot of Today.
+- **The minimum session counts in full**, said on the card with the button, not only after two misses.
+
+The guide's pace topic no longer states a figure as your aim, because only your own goal and dates can say that.
+
 ## 0.16.0
 
 A missed session, and the morning weigh-in, said where you will see them.

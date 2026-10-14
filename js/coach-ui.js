@@ -3,7 +3,8 @@
 
 import * as rules from './rules.js';
 import * as coach from './coach.js';
-import { esc, shortDate } from './ui.js';
+import { esc, num, shortDate } from './ui.js';
+import { RAILS } from './coach-constants.js';
 import { say, LIFT_NOTE, dayName } from './coach-words.js';
 import { briefing } from './briefing.js';
 import { compose, LABELS } from './briefing-words.js';
@@ -109,6 +110,7 @@ export function weekCardHtml(c) {
       <span class="card-title">Coach, the week</span>
       ${w.week ? `<span class="card-tag">${range(w)}</span>` : ''}
       <div class="coach-slot">${verdict}${loud}</div>
+      <div class="small muted">Lines I never cross: never under ${num(RAILS.kcalFloor)} kcal, never more than ${RAILS.maxLossKgPerWeek} kg a week, never less protein.</div>
       ${lines ? `<details class="numbers"><summary class="link">Show the numbers</summary><div class="unfold"><div class="coach-slot facts">${lines}</div></div></details>` : ''}
       ${sofar}
       <div class="small muted">Fixed rules from your plan, worked out on the phone. It only reads what you logged, and it never changes your targets.</div>

@@ -9,7 +9,9 @@ import { logged, asSets } from './workout.js';
 import { esc, num, fmt, shortDate, litres, actions, forms, openSheet, field, readNumber } from './ui.js';
 import { weekCardHtml, coachCodes, briefingCardHtml } from './coach-ui.js';
 import { dayFacts, isJudgeable } from './coach.js';
-import { DAY as COACH_DAY } from './coach-constants.js';
+import { DAY as COACH_DAY, WEEK as COACH_WEEK } from './coach-constants.js';
+
+const DOW_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 const LIFT_NAMES = Object.fromEntries(Object.values(sessions).flat().map((e) => [e.id, e.name]));
 // A swapped lift's id is the original id, then '~', then the new name in lower case.
@@ -62,7 +64,7 @@ function weightChart(c) {
       ${c.key >= plan.start && c.key <= plan.end ? `<line x1="${x(c.key)}" x2="${x(c.key)}" y1="${T}" y2="${H - B}" class="today-line"/>` : ''}
     </svg>
     <div class="legend left">
-      <span><i class="swatch dashed"></i>Plan</span>
+      <span><i class="swatch dashed"></i>Plan, flat in the diet break</span>
       <span><i class="swatch solid"></i>7-day average</span>
       <span><i class="key planned"></i>Each weigh-in</span>
     </div>`;
@@ -73,7 +75,9 @@ function weightCard(c) {
   const planned = rules.planWeight(c.key, c.plan, c.profile.startKg, c.profile.goalKg);
   const count = [0, 1, 2, 3, 4, 5, 6].filter((i) => c.data.days[rules.addDays(c.key, -i)]?.weightKg).length;
   const diff = avg === null ? null : Math.round((avg - planned) * 10) / 10;
-  const versus = diff === null ? `The average needs ${3 - count} more weigh-in${3 - count === 1 ? '' : 's'} this week.`
+  const short = rules.MIN_WEIGH_INS - count;
+  const pace = rules.planPace(c.profile.startKg, c.profile.goalKg, c.plan);
+  const versus = diff === null ? `The average needs ${short} more weigh-in${short === 1 ? '' : 's'} in the last 7 days.`
     : Math.abs(diff) < 0.3 ? `Right on the plan line (${planned} kg).`
     : `${Math.abs(diff)} kg ${diff > 0 ? 'above' : 'below'} the plan line (${planned} kg).`;
   return `
@@ -81,9 +85,9 @@ function weightCard(c) {
       <span class="card-title">Weight</span>
       <span class="card-tag">7-day average</span>
       <div><span class="big huge${avg === null ? ' muted' : ''}">${avg ?? c.profile.startKg} kg</span>${avg === null ? '<span class="muted"> starting weight</span>' : ''}</div>
-      <div class="muted" style="font-size:14px">${versus} Goal ${c.profile.goalKg} kg around ${shortDate(c.plan.end)}, at about 0.6 to 0.8 kg a week.</div>
+      <div class="muted" style="font-size:14px">${versus} Goal ${c.profile.goalKg} kg around ${shortDate(c.plan.end)}${pace ? `, at ${pace.text}` : ''}.</div>
       ${weightChart(c)}
-      <div class="small muted">The first week or two usually drops extra water. One weigh-in means little, so read the average.</div>
+      <div class="small muted">The first week or two usually drops extra water. One weigh-in means little, so read the average. This number needs ${rules.MIN_WEIGH_INS} mornings in 7 days. The Coach's weekly read needs ${COACH_WEEK.weighIns} in the week itself, which is why the two can differ.</div>
     </section>`;
 }
 
@@ -115,7 +119,7 @@ function sessionsCard(c, days) {
       <span class="card-title">Sessions</span>
       <span class="big">${done} of ${Math.max(planned, done)}</span>
       <div class="dots">${Array.from({ length: Math.max(planned, done) }, (_, i) => `<i class="${i < done ? 'on' : ''}"></i>`).join('')}</div>
-      <span class="small muted sub">This week${missed ? `, ${missed} missed` : ', nothing missed'}.</span>
+      <span class="small muted sub">This week, ${DOW_LONG[c.plan.weekStartDow]} to ${DOW_LONG[(c.plan.weekStartDow + 6) % 7]}${missed ? `, ${missed} missed` : ', nothing missed'}.</span>
     </section>`;
 }
 
@@ -338,7 +342,7 @@ export function claudeText(c) {
     `Stall check: ${rules.stallCheck(c.data.days, c.key, c.plan.start, c.plan.phases).status}.`,
     ...coachCodes(c).map((l) => `Coach (fixed rules, no AI), rule codes: ${l}`),
     '',
-    'Plan rules: lose about 0.6 to 0.8 kg a week. Four sessions a week in the order Upper A, Lower A, Upper B, Lower B.',
+    `Plan rules: lose ${rules.planPace(p.startKg, p.goalKg, c.plan)?.text ?? 'at a steady pace'}. Four sessions a week in the order Upper A, Lower A, Upper B, Lower B.`,
     'Keep a weight until every set hits the top of the rep range, then make the smallest jump. A missed session stays next in line.',
     `Never go below ${rules.KCAL_FLOOR} kcal. If the average is flat for two weeks and the waist is too, cut ${rules.STALL_CUT_KCAL} kcal or add ${rules.STALL_ADD_STEPS} steps.`,
     '',

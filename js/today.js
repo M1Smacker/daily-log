@@ -5,6 +5,7 @@ import * as store from './store.js';
 import { ui, ctx } from './state.js';
 import { todayCardHtml } from './coach-ui.js';
 import { WEEK } from './coach-constants.js';
+import * as coach from './coach.js';
 import {
   view, esc, num, fmt, shortDate, longDate, litres, DOW, TICK, CHEVRON,
   actions, forms, app, openSheet, closeSheet, fill, field, readNumber,
@@ -17,6 +18,7 @@ const WATER_STEP_ML = 250;
 const MAX_WATER_ML = 15000;
 const MAX_STEPS = 100000;
 const STATE_WORD = { done: 'done', min: 'minimum done', missed: 'missed', planned: 'planned', rest: 'rest day' };
+const DOW_LONG = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // One day, in the strip or the calendar. Days up to today can be tapped to mark them.
 function dayCell(c, d, inStrip) {
@@ -76,6 +78,7 @@ function weekCard(c, days) {
   const strip = rules.weekStrip(days, c.key, c.plan.weekStartDow).map((d) => dayCell(c, d, true)).join('');
   return `
     <section class="week-card" aria-label="${open ? 'Full plan' : 'This week'}">
+      ${open ? '' : `<div class="rule-note strip-note">This week runs ${DOW_LONG[c.plan.weekStartDow]} to ${DOW_LONG[(c.plan.weekStartDow + 6) % 7]}.</div>`}
       <div class="settle${ui.fresh === 'calendar' ? ' fresh' : ''}">${open ? calendar(c, days) : `<div class="strip">${strip}</div>`}</div>
       <button type="button" class="fold${open ? ' open' : ''}" data-act="toggle-calendar" aria-expanded="${open}">
         ${open ? 'Back to this week' : 'Show the full plan'}${CHEVRON}
@@ -171,6 +174,20 @@ function unfinishedCards(c) {
 
 // The morning weigh-in, at the top, with the box right there. It is the one daily number the
 // Coach cannot work without, and a card at the bottom of the page was easy to walk past.
+// When the Coach is not reading weight yet, say the date it starts. "No verdict yet" on its own
+// leaves you checking every day for something that cannot come.
+function quietUntil(c) {
+  // The same windows and the same clear day the weekly check uses, so the date cannot disagree
+  // with what the Coach itself will say.
+  const here = coach.weightWindows({ plan: c.plan, days: c.data.days })
+    .filter(([a, b]) => a <= c.key && b >= c.key)
+    .sort((a, b) => (a[1] < b[1] ? 1 : -1))[0];
+  if (!here) return null;
+  const why = { start: 'Early weight change is mostly water', break: 'Weight is settling after the diet break', creatine: 'Creatine holds a little water at first' }[here[2]];
+  const from = coach.clearDay(here[1], c.plan.weekStartDow);
+  return `${why}, so the Coach's first weight read is ${fmt(from, { weekday: 'long', day: 'numeric', month: 'short' })}. Weigh in anyway: that read is built from these mornings.`;
+}
+
 function weighInCard(c) {
   if (c.day.weightKg != null) return '';
   const hour = new Date().getHours();
@@ -178,7 +195,7 @@ function weighInCard(c) {
   const n = rules.weighInsThisWeek(c.data.days, c.key, c.plan.weekStartDow);
   const need = `Weigh-ins this week: ${n}. A week's average needs ${WEEK.weighIns} mornings.`;
   if (!morning) {
-    return `<div class="note"><b>No weigh-in yet today</b>A weight after food does not compare with the morning ones, so the next one is tomorrow morning. ${need}</div>`;
+    return `<div class="note"><b>No weigh-in yet today</b>A weight after food does not compare with the morning ones, so the next one is tomorrow morning. ${need}${quietUntil(c) ? ` ${esc(quietUntil(c))}` : ''}</div>`;
   }
   return `
     <section class="card raised weigh">
@@ -188,7 +205,7 @@ function weighInCard(c) {
         ${field('value', 'Weight', '', { unit: 'kg' })}
         <button class="btn primary">Save weight</button>
       </form>
-      <div class="small muted">${need}</div>
+      <div class="small muted">${need}${quietUntil(c) ? ` ${esc(quietUntil(c))}` : ''}</div>
     </section>`;
 }
 
@@ -249,6 +266,7 @@ function nextSession(c, days, run) {
         <button type="button" class="btn primary" data-act="start-workout"${pick}>Start session</button>
         <button type="button" class="btn" data-act="start-workout" data-minimum="true"${pick}>Minimum</button>
       </div>
+      <div class="rule-note">Minimum: the first ${rules.MIN_EXERCISES} lifts, about 30 minutes. It counts as a full session.</div>
       ${next.key === c.key && !lockedIn ? '<button type="button" class="btn quiet" data-act="mark-today" data-type="missed">Not training today</button>' : ''}
       ${lockedIn ? '' : '<button type="button" class="link" data-act="pick-session">Do a different session</button>'}
       <div class="small muted">A missed day never doubles up. The same session just stays next in line.</div>
@@ -293,7 +311,7 @@ function smallCards(c) {
       <section class="card mini">
         <span class="card-title">Steps</span>
         <span class="big">${num(steps)}</span>
-        <span class="small muted sub">of ${num(stepGoal)} today</span>
+        <span class="small muted sub">of ${num(stepGoal)} today${stepGoal < c.plan.steps.target ? `. Up ${num(c.plan.steps.weeklyAdd)} every ${DOW_LONG[rules.weekday(c.plan.start)]}, to ${num(c.plan.steps.target)}.` : '. The full target.'}</span>
         <div class="bar">${fill('steps', steps, stepGoal)}</div>
         <button type="button" class="btn compact" data-act="open-steps">${d.steps == null ? 'Add steps' : 'Update'}</button>
       </section>

@@ -432,3 +432,23 @@ test('weighInsThisWeek: counts mornings with a weight since Thursday, today incl
   assert.equal(r.weighInsThisWeek(days, '2026-10-14', 4), 3); // Thu 8 to Wed 14: three real weights
   assert.equal(r.weighInsThisWeek(days, '2026-10-15', 4), 1); // a new week begins on Thursday
 });
+
+// ----- The pace the plan asks for, worked out, not written in by hand -----
+
+test('planPace: the weekly loss the start, goal and dates add up to, over the days that are not a break', () => {
+  // 92 to 77.5 kg is 14.5 kg. The plan's loss days leave out the diet break.
+  const pace = r.planPace(92, 77.5, plan);
+  assert.ok(pace.perWeek > 0.5 && pace.perWeek < 0.8, `got ${pace.perWeek}`);
+  assert.equal(pace.text, `about ${pace.perWeek} kg a week`);
+  // A goal at or above the start has no pace to name, and never divides by zero.
+  assert.equal(r.planPace(92, 92, plan), null);
+  assert.equal(r.planPace(92, 95, plan), null);
+  assert.equal(r.planPace(null, 77.5, plan), null);
+});
+
+test('planPace: a pace over 1 kg a week is said as the plan asking too much', () => {
+  const soon = { ...plan, end: r.addDays(plan.start, 60) };
+  const pace = r.planPace(92, 77.5, soon);
+  assert.ok(pace.perWeek > 1);
+  assert.equal(pace.fast, true);
+});

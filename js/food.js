@@ -11,6 +11,8 @@ import { ui, ctx as appCtx } from './state.js';
 import { sheet, esc, num, shortDate, longDate, actions, forms, app, openSheet, closeSheet, field, readNumber } from './ui.js';
 import * as lookup from './lookup.js';
 import { foods as preloaded } from './foods.js';
+import { dayFacts, isJudgeable } from './coach.js';
+import { DAY as COACH_DAY } from './coach-constants.js';
 
 // The Food screen can show an earlier day (ui.food.day), for a meal that was forgotten.
 // Everything below reads and saves through this, so `key` and `day` are the day on screen
@@ -105,6 +107,14 @@ function mealCard(c, id) {
       ${list.map(entryRow).join('')}
       <button type="button" class="add-row" data-act="open-add" data-meal="${id}"><span aria-hidden="true">+</span>Add to ${MEALS[id].toLowerCase()}</button>
     </section>`;
+}
+
+// What it takes for a day to count in the weekly numbers. Said while the day is still being
+// logged, not after it has already fallen short.
+function countsNote(c) {
+  const f = dayFacts(c.day.food ?? []);
+  if (isJudgeable(f)) return '';
+  return `<div class="rule-note">A day joins the weekly averages once it has ${num(COACH_DAY.judgeMinKcal)} kcal and ${COACH_DAY.judgeMinMeals} meals logged. So far: ${num(Math.round(f.kcal))} kcal and ${f.meals} ${f.meals === 1 ? 'meal' : 'meals'}.</div>`;
 }
 
 // ----- The Add screen -----
@@ -247,7 +257,8 @@ export function foodBody() {
   if (ui.food.adding || ui.food.picking) return addScreen(c);
   const eaten = rules.totals(c.day.food ?? []);
   return dayNav(c) + leftToday(c, eaten) + Object.keys(MEALS).map((id) => mealCard(c, id)).join('') +
-    `<div class="row total"><span>Total</span><span>${num(eaten.kcal)} kcal, ${num(eaten.protein)} g protein</span></div>`;
+    `<div class="row total"><span>Total</span><span>${num(eaten.kcal)} kcal, ${num(eaten.protein)} g protein</span></div>` +
+    countsNote(c);
 }
 
 // Step back to an earlier day and forward again, never past today.
@@ -880,6 +891,7 @@ actions['edit-food'] = (el) => {
         ${field('grams', 'Grams in a serving', f.grams, { unit: 'g', required: false })}
       </div>
       <div class="small muted">Fill in the grams if you want to be able to log this food by weight.</div>
+      ${f.id ? '<div class="rule-note">Meals you have already logged keep the numbers they were logged with. This changes the saved food, for next time.</div>' : ''}
       ${f.id && GAPS.some((k) => f[k] == null) ? '<div class="small muted">An empty box here is a number nobody gave for this food. It can stay empty: it shows as not known and adds nothing to your totals.</div>' : ''}
       <button class="btn primary">Save food</button>
       ${f.id ? `<button type="button" class="btn" data-act="delete-food" data-id="${esc(f.id)}">Remove this food</button>` : ''}

@@ -13,6 +13,21 @@ import { progressBody } from './progress.js';
 import { topics } from './guide.js';
 import { startPwa } from './pwa.js';
 
+// Writes saved on the phone but not yet on the server. It was only said at the foot of Today,
+// which is the one place you are not looking when you have just logged something.
+const waitingDot = () => (store.account.pending
+  ? '<span class="pill waiting" aria-label="Some entries are saved on this phone and waiting to sync">Waiting to sync</span>'
+  : '');
+
+// Between midnight and the rollover hour the app's day is still yesterday. Anything logged now
+// lands on that day, so the date in the header says so instead of looking a day behind.
+function stillYesterday(c) {
+  const hour = rules.localHour(new Date(), c.plan.utcOffsetHours);
+  if (hour >= c.plan.rolloverHour) return '';
+  const h = c.plan.rolloverHour;
+  return `<span class="still">Still, until ${h === 0 ? 'midnight' : `${h} am`}</span>`;
+}
+
 // Every screen: glass controls that float at the top, then the page, which animates in.
 function frame(c, title, body, { sub, back = false, bare = false } = {}) {
   const phase = rules.phaseFor(c.key, c.plan.phases);
@@ -22,11 +37,11 @@ function frame(c, title, body, { sub, back = false, bare = false } = {}) {
   const backBtn = `<a class="icon-btn" href="#today" aria-label="Back to Today">${BACK}</a>`;
   const settings = `<a class="icon-btn" href="#settings" aria-label="Settings">${SETTINGS}</a>`;
   view.innerHTML = `
-    ${bare ? '' : `<div class="topbar">${back ? backBtn : pill}${title === 'Settings' ? pill : settings}</div>`}
+    ${bare ? '' : `<div class="topbar">${back ? backBtn : pill}${waitingDot()}${title === 'Settings' ? pill : settings}</div>`}
     <div class="page ${ui.enter}">
       <header class="head">
         <div>
-          <div class="date">${sub ?? longDate(c.key)}</div>
+          <div class="date">${sub ?? longDate(c.key)}${sub ? '' : stillYesterday(c)}</div>
           <h1>${title}</h1>
         </div>
       </header>

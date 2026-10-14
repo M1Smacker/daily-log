@@ -1,6 +1,8 @@
 // The guide: short explanations of the parts of the plan that are easy to forget.
 // Taken from the research plan. Phase entries are built from plan.js, not written here.
 
+import { WARMUP_SHARE } from './rules.js';
+
 export const topics = [
   {
     group: 'In the gym',
@@ -38,7 +40,9 @@ export const topics = [
           <p>When you are done, tap Full session or Minimum. That one tap marks the day.</p>
           <p>The recap after it has everything you logged already in it. Fill in what you did not log, fix anything that is wrong, and tap Save recap. If every set reached the top of the range, the next sheet shows a heavier weight.</p>
           <p>Try to use one weight for all the sets of a lift. If you did change it, the app goes by the weight you did the most sets with. A heavier set counts as done if it got at least the bottom of the rep range. A lighter set means the weight stays for now.</p>
-          <p>Skip the logging and the recap and the day still counts. The app just cannot move your weights up without them.</p>`,
+          <p>Skip the logging and the recap and the day still counts. The app just cannot move your weights up without them.</p>
+          <p>Log your warm-ups if you want them. A light set done before your first proper set, under ${Math.round(WARMUP_SHARE * 100)}% of your heaviest that day, is kept but never counted for or against your next weight. A lighter set after the work has started is a back-off set, and that does count.</p>
+          <p>Your day turns over at 4 am by default, not midnight, so a late night still belongs to the day before. The hour is yours to change, under Day rollover in Settings. If a session runs past it the later sets land on the new day, and the sheet says so while it is happening.</p>`,
       },
       {
         title: 'Order and rest',
@@ -94,12 +98,14 @@ export const topics = [
           <p>The app cannot ring or buzz you when it is closed, because a phone only does that for apps with a server behind them. Set an alarm on your phone called "Weigh in" for when you get up, so the scale comes before breakfast.</p>
           <p>One day means nothing. Salt, a late meal or a hard session can move the scale by a kilo. The app uses your 7-day average, so judge progress week to week.</p>
           <p>The first week or two usually drops an extra 1 to 1.5 kg. That is water and food in your gut, not fat, and it is normal.</p>
-          <p>Measure your waist once a week, same morning, at the belly button, relaxed, after breathing out.</p>`,
+          <p>Measure your waist once a week, same morning, at the belly button, relaxed, after breathing out.</p>
+          <p>Two different counts, both real: the weight number on Progress is an average of the last 7 days and needs 3 mornings, while the Coach's weekly read needs 4 mornings inside the week itself. That is why one can be there and the other not.</p>
+          <p>While the scale is not trusted yet (the first fortnight, after the diet break, or the first days on creatine), the weigh-in card says the date the Coach starts reading it. Keep weighing in anyway, because that read is built from those mornings.</p>`,
       },
       {
         title: 'The pace',
         body: `
-          <p>The aim is about 0.6 to 0.8 kg a week. In the research, people losing at that pace kept and even gained muscle, while people losing twice as fast did not.</p>
+          <p>About 0.6 to 0.8 kg a week is the sweet spot in the research: people losing at that pace kept and even gained muscle, while people losing twice as fast did not. The weight card on Progress works out what your own goal and end date come to, so that is the number to go by.</p>
           <p>Faster is not better here. If you are losing more than about 1% of your bodyweight a week (and never more than 1 kg) after the first two weeks, the answer is to eat a little more.</p>`,
       },
       {

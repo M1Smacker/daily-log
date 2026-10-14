@@ -374,7 +374,7 @@ export const wentBackwards = (scores) => {
 
 // ----- Weight and progress -----
 
-const MIN_WEIGH_INS = 3;
+export const MIN_WEIGH_INS = 3; // mornings in 7 days for a weight average
 
 // Average of the weigh-ins in the 7 days ending on key, or null with fewer than three.
 // days: { 'YYYY-MM-DD': { weightKg } }
@@ -671,19 +671,34 @@ export function profileProblem(profile) {
   return null;
 }
 
-// Warnings about the pace the start weight, goal and end date add up to.
+// The days of the plan the weight is meant to come off in: everything but the maintenance phases.
+function lossDays(plan) {
+  let n = 0;
+  for (let k = addDays(plan.start, 1); k <= plan.end; k = addDays(k, 1)) {
+    if (!plan.phases.some((p) => p.maintenance && k >= p.start && k <= (p.end ?? k))) n++;
+  }
+  return n;
+}
+
+// The pace the start weight, the goal and the end date add up to: { perWeek, text, fast }.
+// null when there is nothing to work it out from. Screens say this instead of a figure typed
+// into a sentence, so moving the goal or the dates in Settings changes what they say.
 const SAFE_KG_A_WEEK = 1;
+export function planPace(startKg, goalKg, plan) {
+  if (!(startKg > 0) || !(goalKg > 0) || goalKg >= startKg) return null;
+  const days = lossDays(plan);
+  if (!days) return null;
+  const perWeek = round1(((startKg - goalKg) / days) * 7);
+  return { perWeek, text: `about ${perWeek} kg a week`, fast: perWeek > SAFE_KG_A_WEEK };
+}
+
+// Warnings about the pace the start weight, goal and end date add up to.
 export function paceWarnings(startKg, goalKg, plan) {
   if (goalKg >= startKg) return ['Your goal is not below your starting weight, so the plan line will not go down.'];
-  // The loss happens outside the maintenance phases.
-  let lossDays = 0;
-  for (let k = addDays(plan.start, 1); k <= plan.end; k = addDays(k, 1)) {
-    if (!plan.phases.some((p) => p.maintenance && k >= p.start && k <= (p.end ?? k))) lossDays++;
-  }
-  if (!lossDays) return ['The whole plan is a maintenance phase, so there are no days left to lose the weight in.'];
-  const perWeek = round1(((startKg - goalKg) / lossDays) * 7);
-  return perWeek > SAFE_KG_A_WEEK
-    ? [`Reaching ${goalKg} kg by the end date means losing ${perWeek} kg a week. More than ${SAFE_KG_A_WEEK} kg a week costs muscle. A later date or a higher goal is safer.`]
+  if (!lossDays(plan)) return ['The whole plan is a maintenance phase, so there are no days left to lose the weight in.'];
+  const pace = planPace(startKg, goalKg, plan);
+  return pace?.fast
+    ? [`Reaching ${goalKg} kg by the end date means losing ${pace.perWeek} kg a week. More than ${SAFE_KG_A_WEEK} kg a week costs muscle. A later date or a higher goal is safer.`]
     : [];
 }
 

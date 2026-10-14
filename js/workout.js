@@ -127,6 +127,17 @@ const targetText = (ex) =>
     }[ex.p.type] ?? unit(ex)]
     : ['?', 'find a weight'];
 
+// A session that starts before the rollover and runs past it: the sheet on screen is yesterday's
+// day, and anything logged now would land on today instead. Say so, with the way out.
+function rolloverWarning(v) {
+  const c = v.c;
+  if (v.key !== c.key) return '';
+  const hour = rules.localHour(new Date(), c.plan.utcOffsetHours);
+  if (hour >= c.plan.rolloverHour || hour < c.plan.rolloverHour - 1) return '';
+  const h = c.plan.rolloverHour;
+  return `<div class="note warn"><b>The day turns over at ${h} am</b>Sets logged after that land on the new day, and this session would end up split across two days. Finish the session before ${h} am, or log the rest from the recap on the day it started.</div>`;
+}
+
 // One lift on the sheet. Tapping it shows the details, but nothing needs tapping.
 function sheetRow(v, ex) {
   const open = ui.openLift === ex.id;
@@ -193,6 +204,7 @@ function logPart(v, ex) {
         ${ex.last ? `<button type="button" class="link" data-act="same-as-last" data-ex="${ex.id}">Same as last time</button>` : '<span></span>'}
         <button type="button" class="link" data-act="log-add-set">Add a set</button>
       </div>
+      ${body ? '' : `<div class="rule-note">Log your warm-ups if you want them. A light set before your first proper set (under ${Math.round(rules.WARMUP_SHARE * 100)}% of your heaviest) is kept, but never counted for or against the next weight. A lighter set after the work has started does count.</div>`}
       ${ex.alt ? `<label class="tick"><input type="checkbox" data-alt="${ex.id}" ${ex.entry?.alt ? 'checked' : ''}>Did the alternative</label>` : ''}
       <div class="small log-status" data-log-status role="status">${asSets(ex.entry).length ? 'Saved.' : ''}</div>
       <div class="coach-slot" data-coach>${coachFor(v, ex, asSets(ex.entry), Boolean(ex.entry?.alt))}</div>
@@ -352,6 +364,7 @@ export function workoutView() {
 
   const sheetPart = `
     ${past}
+    ${rolloverWarning(v)}
     <div class="switch-card">
       <div>
         <b>Minimum session</b>
