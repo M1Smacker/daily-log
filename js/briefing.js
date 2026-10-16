@@ -126,7 +126,10 @@ export function selectWeek(read, history = []) {
     const downOnce = f.lifts.filter((l) => l.downTwice).map((l) => l.id);
     const note = (code) => line(wk, code)?.level === 'note';
     source = 'note';
-    if (downOnce.length === 1 && line(wk, 'F8')?.level === 'watch') fix = item('X12', { lifts: downOnce, more: 0 });
+    // In the easy fortnight the card does not press lifts, sessions, protein or steps, so the
+    // briefing does not either: the same check decides both.
+    if (f.quiet) { fix = item(f.inBreak ? 'X16b' : 'X16'); source = 'none'; }
+    else if (downOnce.length === 1 && line(wk, 'F8')?.level === 'watch') fix = item('X12', { lifts: downOnce, more: 0 });
     else if (note('F7')) fix = item('X11', { n: f.sessions, of: f.of });
     else if (note('F3')) fix = item('X13', { g: f.protein, P: f.P });
     else if (note('F6')) fix = item('X14', { n: f.steps, t: f.stepGoal });

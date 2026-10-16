@@ -223,7 +223,7 @@ test('6. the same logging gap for the third week: shorter and blunter, and stale
   assert.deepEqual([ids(sel.parts.well), ids(sel.parts.fix), sel.parts.fix[0].repeat], [['G5', 'G8'], ['X3'], 3]);
   assert.deepEqual(text.where, ['Build, day 29 of 42.', 'You are at 88.9 kg, 3.1 down from 92.0, 11.4 to go.']);
   assert.deepEqual(text.well, ['Protein averaged 163 g, in range.', 'Steps averaged 8,100, on target.']);
-  assert.deepEqual(text.fix, ['Third week running: food was logged on 4 of 7 days.', 'Log every day this week.', 'Nothing else matters until this is fixed.']);
+  assert.deepEqual(text.fix, ['Third week running: food was logged in full on 4 of 7 days.', 'Log every day this week.', 'Nothing else matters until this is fixed.']);
   assert.deepEqual(text.next, ['Next read: Thursday 3 Dec, and it needs 5 days of food and 4 weigh-ins.']);
   holds(sel, wk, text, 'fixture 6');
 });
@@ -315,7 +315,7 @@ test('a fix that has just cleared is said once, first', () => {
   week(days, '2026-11-11', { avg: 89.9 }); week(days, '2026-11-18', { avg: 89.2 }); week(days, '2026-11-25', { avg: 88.5, foodDays: 7 });
   const { sel, text } = read('2026-11-26', days, { history: [{ fix: 'X3', repeat: 2, well: ['G4'], verdict: 'W11', level: 'good', foodDays: 3, sessions: 4, protein: 167, steps: null }] });
   assert.equal(sel.parts.well[0].id, 'G9a');
-  assert.equal(text.well[0], 'Food logged on 7 of 7 days, up from 3: that fix worked.');
+  assert.equal(text.well[0], 'Food logged in full on 7 of 7 days, up from 3: that fix worked.');
   assert.equal(sel.parts.fix[0].repeat, 1);
 });
 

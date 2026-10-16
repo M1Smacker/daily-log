@@ -12,7 +12,7 @@
 //   (backups)          users/{uid}/backups/{day}  one whole-app copy a day, the last 14 kept
 
 import { firebaseConfig } from './firebase-config.js';
-import { isDay } from './rules.js';
+import { isDay, MEAL_IDS } from './rules.js';
 
 const KEY = 'daily-log';
 const VERSION = 1;
@@ -54,6 +54,11 @@ function tidyDay(day) {
   if (d.workout && (typeof d.workout.lifts !== 'object' || !d.workout.lifts)) d.workout = { ...d.workout, lifts: {} };
   if (d.food === undefined) delete d.food;
   if (d.cardio === undefined) delete d.cardio;
+  // Meals marked as eaten nothing: only real meal names, each once.
+  if ('noMeal' in d) {
+    const none = Array.isArray(d.noMeal) ? [...new Set(d.noMeal.filter((m) => MEAL_IDS.includes(m)))] : [];
+    if (none.length) d.noMeal = none; else delete d.noMeal;
+  }
   return d;
 }
 // A day key has to be a real calendar day. '2026-13-45' looks like one, and date sums on it throw.

@@ -38,6 +38,20 @@ export const setupBody = () => `
   <div class="muted" style="font-size:16px">A few numbers to set the app up. You can change any of them later in Settings.</div>
   ${numbersForm(null, 'Start')}`;
 
+// The two easy weeks: start them again later, or see when they end. Today has the rest.
+function easyWeeks(c) {
+  const f = rules.focusFor(c.plan, c.key);
+  const on = f && !f.over;
+  return `
+    <section class="card">
+      <span class="card-title">Two easy weeks</span>
+      <div class="muted" style="font-size:14px">${on
+        ? `On until ${fmt(f.to, { weekday: 'long', day: 'numeric', month: 'short' })}: only a morning weigh-in and every meal logged are asked for. Today has the button to end them early.`
+        : 'Fourteen days where the app asks for two things only: a morning weigh-in and every meal logged, even as a rough guess. The gym has no target and steps are not counted. Nothing about the plan changes.'}</div>
+      ${on ? '' : '<button type="button" class="btn" data-act="focus-start">Start two easy weeks today</button>'}
+    </section>`;
+}
+
 // When each phase starts, and the goal date. The first phase is the plan's first day and stays put.
 function datesForm(c) {
   const { phases, end } = c.plan;
@@ -75,6 +89,7 @@ export function settingsBody() {
       <button class="btn">Save</button>
     </form>
     ${datesForm(c)}
+    ${easyWeeks(c)}
     <form class="card" data-form="gym" novalidate>
       <span class="card-title">Your gym</span>
       <label class="field"><span>Dumbbells <i>kg</i></span>

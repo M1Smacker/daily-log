@@ -127,6 +127,73 @@ export function weighInsThisWeek(days, key, weekStartDow) {
   return n;
 }
 
+// ----- The easy fortnight -----
+// Two weeks where the app asks for two things only: a weigh-in every morning, and every meal
+// logged, even as a rough guess. Gym has no target and steps are not counted. Stored as
+// plan.focus = { from, to, closed? }. Nothing about the plan itself changes.
+
+export const MEAL_IDS = ['breakfast', 'lunch', 'snack', 'dinner'];
+export const FOCUS_DAYS = 14;
+const FOCUS_MAX_DAYS = 92;
+
+// "Two more weeks": taken within a week of the end, the same run carries on, so the weeks already
+// done stay part of it (the Coach looks back at them). Later than that, a new run starts today.
+export function focusAgain(focus, key) {
+  const to = addDays(key, FOCUS_DAYS - 1);
+  if (focus && isDay(focus.from) && isDay(focus.to) && diffDays(key, focus.to) <= 7 && diffDays(to, focus.from) < FOCUS_MAX_DAYS) {
+    return { from: focus.from, to };
+  }
+  return { from: key, to };
+}
+
+// Where today sits in the fortnight: { from, to, day, left, over } or null when there is none.
+// over: the two weeks have run out and the end has not been answered yet.
+export function focusFor(plan, key) {
+  const f = plan?.focus;
+  if (!f || f.closed || !isDay(f.from) || !isDay(f.to) || key < f.from) return null;
+  return { from: f.from, to: f.to, day: Math.min(diffDays(key, f.from) + 1, diffDays(f.to, f.from) + 1), left: Math.max(0, diffDays(f.to, key)), over: key > f.to };
+}
+
+// For each meal: 'logged' (food is in it), 'skipped' (marked "ate nothing") or null.
+// Food always wins over a skip mark. A skip is a food entry with none: true and every number 0,
+// kept in the food list because that list is the one the database already allows and merges
+// safely between devices. (noMeal, a short-lived field, is still read.)
+export const skipEntry = (meal) => ({ id: `none-${meal}`, meal, name: 'Ate nothing', none: true, kcal: 0, protein: 0, carbs: 0, fat: 0, fibre: 0, amount: 1, unit: 'serving', serving: '' });
+export function mealsOf(day) {
+  const food = Array.isArray(day?.food) ? day.food : [];
+  const none = Array.isArray(day?.noMeal) ? day.noMeal : [];
+  return Object.fromEntries(MEAL_IDS.map((m) => [m,
+    food.some((e) => e?.meal === m && !e.none) ? 'logged'
+      : food.some((e) => e?.meal === m && e.none) || none.includes(m) ? 'skipped' : null]));
+}
+export const dayAccounted = (day) => Object.values(mealsOf(day)).every(Boolean);
+
+// How the fortnight went, up to today or its end: mornings weighed and days with every meal
+// accounted for, out of the days so far. Today counts once it is done, so a morning that has
+// not happened yet is never counted against you.
+export function focusTally(days, focus, key) {
+  const last = key > focus.to ? focus.to : key;
+  let n = 0, weighed = 0, full = 0;
+  for (let k = focus.from; k <= last; k = addDays(k, 1)) {
+    const d = days?.[k];
+    const w = Number(d?.weightKg) > 0;
+    const a = dayAccounted(d);
+    if (k === key && !w && !a) continue; // today, nothing yet: not a miss
+    n++;
+    if (w) weighed++;
+    if (a) full++;
+  }
+  return { days: n, weighed, full };
+}
+
+// Sessions done or minimum in the 14 days up to today. "0 of 4 this week" reads as failure on a
+// bad week; this is the number that says whether training is happening.
+export function sessionsIn14(log, key) {
+  let n = 0;
+  for (let i = 0; i < 14; i++) if (['done', 'min'].includes(log[addDays(key, -i)]?.type)) n++;
+  return n;
+}
+
 // Push the current phase's end and every later phase back by n days. Finished phases stay.
 export function shiftPhases(phases, key, n) {
   return phases.map((p) => {
@@ -181,6 +248,11 @@ export function planFrom(base, saved) {
   if (Array.isArray(s.pushExtra)) plan.pushExtra = s.pushExtra.filter((m) => typeof m === 'string');
   for (const k of ['usdaKey', 'geminiKey']) if (typeof s[k] === 'string' && s[k]) plan[k] = s[k];
   if (s.finishAsked === true) plan.finishAsked = true;
+  // The easy weeks: two real dates in order, no longer than three months, or nothing.
+  if (isMap(s.focus) && isDay(s.focus.from) && isDay(s.focus.to) && s.focus.to >= s.focus.from && diffDays(s.focus.to, s.focus.from) < FOCUS_MAX_DAYS) {
+    plan.focus = { from: s.focus.from, to: s.focus.to, ...(s.focus.closed === true ? { closed: true } : {}) };
+  }
+  if (s.focusAsked === true) plan.focusAsked = true;
   // The dates are taken together or not at all.
   const end = s.end ?? base.end;
   const starts = s.phaseStarts ?? base.phases.map((p) => p.start);
@@ -575,7 +647,7 @@ export function pastMeals(days, key, meal, span = 14) {
   const had = new Set();
   for (let i = 1; i <= span; i++) {
     const k = addDays(key, -i);
-    const entries = (days[k]?.food ?? []).filter((e) => e.meal === meal);
+    const entries = (days[k]?.food ?? []).filter((e) => e.meal === meal && !e.none); // a skip is not a meal to eat again
     const sign = entries.map((e) => `${e.foodId ?? e.name}:${e.amount}`).sort().join('|');
     if (!entries.length || had.has(sign)) continue;
     had.add(sign);

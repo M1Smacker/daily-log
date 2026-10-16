@@ -7,7 +7,8 @@ import { ctx } from './state.js';
 import { sessions } from './exercises.js';
 import { logged, asSets } from './workout.js';
 import { esc, num, fmt, shortDate, litres, actions, forms, openSheet, field, readNumber } from './ui.js';
-import { weekCardHtml, coachCodes, briefingCardHtml } from './coach-ui.js';
+import { weekCardHtml, briefingCardHtml, coachForExport } from './coach-ui.js';
+import { exportText, csvText } from './export-text.js';
 import { dayFacts, isJudgeable } from './coach.js';
 import { DAY as COACH_DAY, WEEK as COACH_WEEK } from './coach-constants.js';
 
@@ -250,8 +251,11 @@ function lastExport() {
 const dataCard = () => `
   <section class="card">
     <span class="card-title">Your data</span>
-    <button type="button" class="btn compact" data-act="copy-claude">Copy my data for Claude</button>
-    <div class="small muted">Copies your plan, the last two weeks day by day, and a line for each week. Paste it into the Claude app and ask anything.</div>
+    <div class="pair">
+      <button type="button" class="btn compact" data-act="copy-claude">Copy everything for Claude</button>
+      <button type="button" class="btn compact" data-act="copy-claude-short">Copy a short version</button>
+    </div>
+    <div class="small muted">Everything: how complete your log is, your plan, what the Coach says in full sentences, every day of the last two weeks (a day with nothing logged says so), every weigh-in, all weeks, and each lift first against latest. The short version is the first part and the days. Paste it into the Claude app and ask anything.</div>
     <div class="pair">
       <button type="button" class="btn compact" data-act="export" data-kind="json">Backup file</button>
       <button type="button" class="btn compact" data-act="export" data-kind="csv">Spreadsheet</button>
@@ -300,22 +304,6 @@ function download(name, type, text) {
 }
 
 // One row per day that has anything logged.
-function csv(c) {
-  const head = ['date', 'weight_kg', 'waist_cm', 'steps', 'water_l', 'kcal', 'protein_g', 'carbs_g', 'fat_g', 'fibre_g', 'session', 'cardio_min', 'creatine', 'vitamin_d'];
-  const rows = Object.keys(c.data.days).sort().map((k) => {
-    const d = c.data.days[k];
-    const t = dayKcal(d);
-    const ate = d.food?.length;
-    return rules.csvLine([
-      k, d.weightKg, d.waistCm, d.steps, d.waterMl != null ? d.waterMl / 1000 : '',
-      ate ? t.kcal : '', ate ? t.protein : '', ate ? t.carbs : '', ate ? t.fat : '', ate ? t.fibre : '',
-      d.session ? `${d.workout?.session ?? ''} ${d.session.type}`.trim() : '',
-      (d.cardio ?? []).reduce((a, x) => a + x.minutes, 0) || '',
-      d.creatine ? 'yes' : '', d.vitaminD ? 'yes' : '',
-    ]);
-  });
-  return [rules.csvLine(head), ...rows].join('\n');
-}
 
 actions.export = (el) => {
   const c = ctx();
@@ -323,73 +311,25 @@ actions.export = (el) => {
     download(`daily-log-${c.key}.json`, 'application/json', JSON.stringify(c.data, null, 2));
     try { localStorage.setItem('daily-log-last-export', new Date().toISOString().slice(0, 10)); } catch { /* storage blocked */ }
   }
-  else download(`daily-log-${c.key}.csv`, 'text/csv', csv(c));
+  else download(`daily-log-${c.key}.csv`, 'text/csv', csvText(c));
   say(el.dataset.kind === 'json' ? 'Backup file saved. It holds everything in the app.' : 'Spreadsheet saved, one row per day.');
 };
 
-// A plain-text summary to paste into the Claude app.
-export function claudeText(c) {
-  const p = c.profile, t = p.targets;
-  const phase = rules.phaseFor(c.key, c.plan.phases);
-  const avg = rules.weightAverage(c.data.days, c.key);
-  const lines = [
-    'This is data from my own fitness tracker. Please use it to answer my question.',
-    '',
-    `Today: ${c.key}${phase ? `, ${phase.name}` : ''}. Plan runs ${c.plan.start} to ${c.plan.end}.`,
-    `Me: ${p.heightCm} cm, started at ${p.startKg} kg, goal ${p.goalKg} kg.`,
-    `Daily targets: ${t.kcal} kcal, ${t.protein} g protein, ${t.carbs} g carbs, ${t.fat} g fat, ${t.fibre} g fibre, ${litres(t.waterMl)} L water.`,
-    `Weight: 7-day average ${avg ?? 'not enough weigh-ins yet'} kg, plan line says ${rules.planWeight(c.key, c.plan, p.startKg, p.goalKg)} kg.`,
-    `Stall check: ${rules.stallCheck(c.data.days, c.key, c.plan.start, c.plan.phases).status}.`,
-    ...coachCodes(c).map((l) => `Coach (fixed rules, no AI), rule codes: ${l}`),
-    '',
-    `Plan rules: lose ${rules.planPace(p.startKg, p.goalKg, c.plan)?.text ?? 'at a steady pace'}. Four sessions a week in the order Upper A, Lower A, Upper B, Lower B.`,
-    'Keep a weight until every set hits the top of the rep range, then make the smallest jump. A missed session stays next in line.',
-    `Never go below ${rules.KCAL_FLOOR} kcal. If the average is flat for two weeks and the waist is too, cut ${rules.STALL_CUT_KCAL} kcal or add ${rules.STALL_ADD_STEPS} steps.`,
-    '',
-    'Last 14 days (date, weight kg, kcal, protein g, carbs g, fat g, steps, water L, session). A + after a number means some foods that day had no figure for it, so the real number is at least that:',
-  ];
-  for (let i = 13; i >= 0; i--) {
-    const k = rules.addDays(c.key, -i);
-    const d = c.data.days[k];
-    if (!d) continue;
-    const m = dayKcal(d);
-    const ate = d.food?.length;
-    const gaps = ate ? rules.unknownIn(d.food) : [];
-    const shown = (name) => (ate ? `${m[name]}${gaps.includes(name) ? '+' : ''}` : '-');
-    lines.push([k, d.weightKg ?? '-', shown('kcal'), shown('protein'), shown('carbs'), shown('fat'),
-      d.steps ?? '-', d.waterMl != null ? litres(d.waterMl) : '-',
-      d.session ? `${d.workout?.session ?? ''} ${d.session.type}${d.session.reason ? ` (${d.session.reason})` : ''}`.trim() : '-'].join(', '));
-  }
-  const weeks = rules.weeks(c.data.days, rules.schedule(c.plan, c.log, c.key), c.key, c.plan.weekStartDow, c.plan.start, 6, countsAsDay);
-  if (weeks.length) {
-    lines.push('', `Week by week, newest first (week starting, finished days with enough food logged to count (${ENOUGH}), average kcal and protein g over those days, sessions done of planned, 7-day average weight kg at the end of the week, change in kg from a week earlier):`);
-    for (const w of weeks) {
-      lines.push([`${w.first}${w.running ? ' (this week so far)' : ''}`, w.foodDays, w.kcal ?? '-', w.protein ?? '-',
-        `${w.done} of ${w.planned}`, w.weight ?? '-', w.change ?? '-'].join(', '));
-    }
-  }
-  // Finished sessions only: a sheet that was opened and never trained is not a session.
-  const recent = Object.keys(c.data.days).sort().reverse().filter((k) => c.data.days[k].workout?.finished).slice(0, 4);
-  if (recent.length) lines.push('', 'Recent sessions (each lift set by set, weight x reps):');
-  for (const k of recent.reverse()) {
-    const w = c.data.days[k].workout;
-    lines.push(`${k} ${w.session}${w.minimum ? ' (minimum)' : ''}`);
-    for (const [id, lift] of Object.entries(w.lifts)) {
-      if (logged(lift)) lines.push(`  ${liftName(id)}${lift.alt ? ' (alternative used)' : ''}: ${rules.setsText(asSets(lift))}${lift.planned ? `, sheet said ${lift.planned} sets` : ''}`);
-    }
-  }
-  return lines.join('\n');
-}
+// "Copy my data for Claude": the text is built in export-text.js from what the Coach worked out.
+// full: false is the short version, for a quick question.
+export const claudeText = (c, full = true) => exportText(c, coachForExport(c), { full });
 
-actions['copy-claude'] = async () => {
-  const text = claudeText(ctx());
-  try {
-    await navigator.clipboard.writeText(text);
-    say('Copied. Paste it into the Claude app and ask your question.');
-  } catch {
-    // Clipboard blocked: show the text so it can be copied by hand.
-    openSheet(`<div class="sheet-body"><div class="card-title">Copy this</div>
-      <textarea class="copy-box" readonly>${esc(text)}</textarea>
-      <button type="button" class="btn quiet" data-act="close-sheet">Close</button></div>`);
-  }
-};
+for (const [act, full] of [['copy-claude', true], ['copy-claude-short', false]]) {
+  actions[act] = async () => {
+    const text = claudeText(ctx(), full);
+    try {
+      await navigator.clipboard.writeText(text);
+      say(full ? 'Copied everything. Paste it into the Claude app and ask your question.' : 'Copied the short version. Paste it into the Claude app and ask your question.');
+    } catch {
+      // Clipboard blocked: show the text so it can be copied by hand.
+      openSheet(`<div class="sheet-body"><div class="card-title">Copy this</div>
+        <textarea class="copy-box" readonly>${esc(text)}</textarea>
+        <button type="button" class="btn quiet" data-act="close-sheet">Close</button></div>`);
+    }
+  };
+}

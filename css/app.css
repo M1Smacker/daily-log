@@ -510,6 +510,11 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .still { display: block; font-size: 12px; color: var(--muted); letter-spacing: 0; text-transform: none; }
 .pill.waiting { font-size: 11px; background: var(--raised); color: var(--muted); }
 .rule-note { font-size: 12px; color: var(--muted); line-height: 1.45; }
+/* The easy weeks card: one row per meal, its name on the left and the two buttons on the right. */
+.meal-checks { display: flex; flex-direction: column; gap: 8px; }
+.meal-check { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; }
+.meal-check > span:first-child { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.meal-check .pair.tight { margin-top: 0; }
 .strip-note { padding: 14px 16px 0; }
 .ticket .rule-note { color: rgb(10 10 11 / 0.55); }
 /* The weigh-in card: the box and the button stacked, so both are easy to hit with a thumb. */
@@ -855,3 +860,5 @@ button:disabled { opacity: 0.35; cursor: default; }
   .btn, .chip, .icon-btn, .pill, .seg button, .rest-slot, .rest-slot .rest-bar { transition: none; }
   .unfold.fresh, .settle.fresh, .form-error:not([hidden]), .update:not([hidden]), .bar > i { animation: none; }
 }
+/* "Ate nothing for lunch" under an empty meal: quieter than the Add row, still a full tap target. */
+.small-link { font-size: 13px; font-weight: 500; color: var(--muted); }

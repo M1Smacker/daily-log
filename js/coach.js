@@ -16,6 +16,8 @@ import { LIFT, SETS, DAY, WEEK, LINES, RAILS, withinRails } from './coach-consta
 
 const { addDays, diffDays, weekday, workSets, workingKg, previousWeight, progression, jumpGoal, setsOf, realSet } = rules;
 const v = (code, level, n = {}) => ({ code, level, n });
+// Lifts going down, protein, steps and sessions: what the easy fortnight does not press.
+const FOCUS_QUIET = new Set(['A3', 'A4', 'A5', 'A6']);
 const isNum = (x) => typeof x === 'number' && Number.isFinite(x);
 const round1 = (n) => Math.round(n * 10) / 10;
 const mean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
@@ -153,8 +155,12 @@ export function ceilingCheck(counts) {
 // What a day's entries add up to, without turning unknown into zero.
 export function dayFacts(entries = []) {
   // Only real entries count. Anything damaged is left out, not read as food.
-  const list = Array.isArray(entries) ? entries.filter((e) => e && typeof e === 'object') : [];
-  const f = { entries: list.length, meals: 0, kcal: 0, kcalUnknown: false, protein: 0, proteinUnknown: false, fat: 0, fatUnknown: false, fibre: 0, fibreUnknown: false };
+  const all = Array.isArray(entries) ? entries.filter((e) => e && typeof e === 'object') : [];
+  // "Ate nothing" marks are not food: they do not count as meals eaten. But a day where every
+  // meal is either logged or marked is complete, whatever it adds up to.
+  const list = all.filter((e) => !e.none);
+  const f = { entries: list.length, meals: 0, kcal: 0, kcalUnknown: false, protein: 0, proteinUnknown: false, fat: 0, fatUnknown: false, fibre: 0, fibreUnknown: false,
+    accounted: rules.MEAL_IDS.every((m) => all.some((e) => e.meal === m)) };
   const meals = new Set();
   for (const e of list) {
     meals.add(e.meal ?? 'other');
@@ -167,9 +173,11 @@ export function dayFacts(entries = []) {
   for (const m of ['kcal', 'protein', 'fat', 'fibre']) f[m] = round1(f[m]);
   return f;
 }
-// A day that can be judged: enough was logged that a low number is not just a short log.
+// A day that can be judged: enough was logged that a low number is not just a short log. Meals
+// marked "ate nothing" can stand in for the two meals (one big meal and nothing else is a whole
+// day), but never for the calorie minimum: a short log is still a short log.
 export const isJudgeable = (f) =>
-  f.entries > 0 && !f.kcalUnknown && f.kcal >= DAY.judgeMinKcal && f.meals >= DAY.judgeMinMeals;
+  f.entries > 0 && !f.kcalUnknown && f.kcal >= DAY.judgeMinKcal && (f.meals >= DAY.judgeMinMeals || f.accounted);
 
 // One day. A closed day (past the 4 am rollover) is judged once and only if enough was logged.
 // The open day says nothing, except one protein reminder after 7 pm.
@@ -453,8 +461,13 @@ export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targ
   if (food.proteinDays >= WEEK.judgeableDays && food.protein < proteinLow) candidates.push({ code: 'A4', g: Math.round(food.protein), goal: proteinLow });
   const stepGoal = rules.stepTarget(w0.to, plan.start, plan.steps);
   if (w0.stepDays >= LINES.stepsMinDays && w0.steps < LINES.stepsLowShare * stepGoal) candidates.push({ code: 'A5', steps: Math.round(w0.steps), goal: stepGoal });
+  // The easy fortnight asks for two things only, so sessions, lifts, protein and steps are not
+  // pressed in a week that touches it. Safety, the log and the verdict's own advice still are.
+  const f = plan.focus;
+  const quiet = Boolean(f && rules.isDay(f.from) && rules.isDay(f.to) && w0.from <= f.to && w0.to >= f.from);
   for (const a of candidates) {
     if (actions.length >= 2) break;
+    if (quiet && FOCUS_QUIET.has(a.code)) continue;
     if (withinRails(a)) actions.push(a);
   }
 
@@ -519,6 +532,7 @@ export function weekCheck({ key, days, T: setTarget, P, targets = {}, plan, targ
     steps: w0.stepDays >= LINES.stepsMinDays ? Math.round(w0.steps) : null, stepGoal,
     lifts: trends.lifts, liftsUp: trends.up, liftsDown: trends.down, liftsTotal: trends.total,
     T, P, maintenance, allActions: candidates.filter(withinRails).length,
+    quiet, // the week touches the easy fortnight
   };
   return { week: { from: w0.from, to: w0.to }, verdict, actions, lines, soFar, facts };
 }

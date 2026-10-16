@@ -70,6 +70,14 @@ export const topics = [
           <p>If you feel too tired to train, go and do just the first two exercises. Most days you will finish once you are there.</p>`,
       },
       {
+        title: 'Two easy weeks',
+        body: `
+          <p>For when everything at once is too much. For 14 days the app asks for two things only: weigh in each morning, and log every meal, even as a rough guess. Those two are what let the Coach tell you anything true.</p>
+          <p>The gym has no target: go when you can, and the session card counts sessions over the last 14 days instead of this week. Steps are not counted. The Coach stops pressing sessions, lifts, protein and steps. It never stops warning you about eating under 1,800 kcal or losing too fast.</p>
+          <p>The card on Today has a row for each meal. "Ate nothing" is for a meal you really skipped, which is different from one you have not logged yet. It is under any empty meal on Food too. One big meal with every other meal marked "ate nothing" counts as a whole day, as long as it has at least 1,200 kcal.</p>
+          <p>At the end you see how it went, and choose to bring the full plan back or carry on for two more weeks. Start them again any time in Settings. Nothing about the plan, the phases or your targets changes.</p>`,
+      },
+      {
         title: 'Missed days',
         body: `
           <p>A gym day with nothing marked counts as missed by itself once the day is over. You do not have to mark it. On the day, "Not training today" on the session card moves the app on straight away, and Undo puts it back.</p>

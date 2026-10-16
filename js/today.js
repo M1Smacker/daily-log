@@ -269,9 +269,117 @@ function nextSession(c, days, run) {
       <div class="rule-note">Minimum: the first ${rules.MIN_EXERCISES} lifts, about 30 minutes. It counts as a full session.</div>
       ${next.key === c.key && !lockedIn ? '<button type="button" class="btn quiet" data-act="mark-today" data-type="missed">Not training today</button>' : ''}
       ${lockedIn ? '' : '<button type="button" class="link" data-act="pick-session">Do a different session</button>'}
-      <div class="small muted">A missed day never doubles up. The same session just stays next in line.</div>
+      <div class="small muted">Sessions in the last 14 days: ${rules.sessionsIn14(c.log, c.key)}.${focusOn(c) ? ' No target in your two easy weeks: go when you can.' : ''} A missed day never doubles up. The same session just stays next in line.</div>
     </section>`;
 }
+
+const focusOn = (c) => { const f = rules.focusFor(c.plan, c.key); return Boolean(f && !f.over); };
+
+// ----- The two easy weeks -----
+
+// Offered once. It changes nothing about the plan: it only asks for less while it runs.
+function focusOffer(c) {
+  if (c.plan.focus || c.plan.focusAsked) return '';
+  return `
+    <section class="card raised">
+      <div class="card-title">Two easy weeks</div>
+      <div class="muted" style="font-size:14px">For the next 14 days the app asks for two things only: weigh in each morning, and log every meal, even as a rough guess. The gym has no target and steps are not counted. After that, the full plan comes back.</div>
+      <div class="pair">
+        <button type="button" class="btn primary" data-act="focus-start">Start today</button>
+        <button type="button" class="btn" data-act="focus-later">Not now</button>
+      </div>
+    </section>`;
+}
+
+const MEAL_NAMES = { breakfast: 'Breakfast', lunch: 'Lunch', snack: 'Snacks', dinner: 'Dinner' };
+
+// While it runs: the day, the two things, and today's meals, each one either in, marked as
+// skipped, or waiting. A skip is "I ate nothing", which is different from "not logged yet".
+function focusCard(c) {
+  const f = rules.focusFor(c.plan, c.key);
+  if (!f) return '';
+  const t = rules.focusTally(c.data.days, f, c.key);
+  if (f.over) {
+    return `
+    <section class="card raised">
+      <div class="card-title">Your two easy weeks are done</div>
+      <div class="muted" style="font-size:14px">You weighed in on ${t.weighed} of ${t.days} ${t.days === 1 ? "morning" : "mornings"}, and every meal was logged on ${t.full} of ${t.days} ${t.days === 1 ? "day" : "days"}.</div>
+      <div class="pair">
+        <button type="button" class="btn primary" data-act="focus-done">Bring the full plan back</button>
+        <button type="button" class="btn" data-act="focus-again">Two more weeks</button>
+      </div>
+    </section>`;
+  }
+  const meals = rules.mealsOf(c.day);
+  const row = (m) => `
+      <div class="meal-check">
+        <span>${meals[m] === 'logged' ? TICK : ''}${MEAL_NAMES[m]}</span>
+        ${meals[m] === 'logged' ? '<span class="small muted">In</span>' : `
+        <span class="pair tight">
+          <button type="button" class="btn compact" data-act="focus-meal-add" data-meal="${m}">Add</button>
+          <button type="button" class="btn compact${meals[m] === 'skipped' ? ' primary' : ''}" data-act="focus-meal-none" data-meal="${m}" aria-pressed="${meals[m] === 'skipped'}">${meals[m] === 'skipped' ? 'Skipped' : 'Ate nothing'}</button>
+        </span>`}
+      </div>`;
+  return `
+    <section class="card raised focus">
+      <span class="card-title">Easy weeks, day ${f.day} of ${rules.diffDays(f.to, f.from) + 1}</span>
+      <div class="muted" style="font-size:14px">Two things only: weigh in each morning, and log every meal. A rough guess beats a blank.</div>
+      ${t.days ? `<div class="small muted">So far: weighed in on ${t.weighed} of ${t.days} ${t.days === 1 ? "morning" : "mornings"}, every meal logged on ${t.full} of ${t.days} ${t.days === 1 ? "day" : "days"}.</div>` : ''}
+      <div class="meal-checks">${rules.MEAL_IDS.map(row).join('')}</div>
+      <button type="button" class="link" data-act="focus-end">End the easy weeks now</button>
+    </section>`;
+}
+
+// Yesterday with nothing at all logged: ask now, while it can still be remembered.
+function yesterdayPrompt(c) {
+  const y = rules.addDays(c.key, -1);
+  if (y < c.plan.start) return '';
+  const meals = rules.mealsOf(c.data.days[y]);
+  if (Object.values(meals).some(Boolean)) return '';
+  return `
+    <div class="note warn"><b>Nothing logged for ${fmt(y, { weekday: 'long' })}</b>Add it now, while you still remember. A rough guess is fine: it beats a blank day.
+      <button type="button" class="btn compact" data-act="log-yesterday">Log ${fmt(y, { weekday: 'long' })}'s food</button>
+    </div>`;
+}
+
+actions['focus-start'] = () => {
+  const k = ctx().key;
+  store.setPlan({ focus: { from: k, to: rules.addDays(k, rules.FOCUS_DAYS - 1) }, focusAsked: true });
+};
+actions['focus-later'] = () => store.setPlan({ focusAsked: true });
+actions['focus-again'] = () => {
+  const c = ctx();
+  store.setPlan({ focus: rules.focusAgain(c.plan.focus, c.key) });
+};
+actions['focus-done'] = () => store.setPlan({ focus: { ...ctx().plan.focus, closed: true } });
+// Two taps, so a slip does not end it. It ends today: the weeks it covered stay as they were.
+actions['focus-end'] = (el) => {
+  if (el.dataset.sure !== '1') {
+    el.dataset.sure = '1';
+    el.textContent = 'Tap again to end them';
+    return;
+  }
+  const c = ctx();
+  const f = c.plan.focus;
+  store.setPlan({ focus: { from: f.from, to: c.key < f.to ? c.key : f.to, closed: true } });
+};
+// "Ate nothing" is a skip entry in the day's food list, added and taken out the same safe way as
+// any food. Tapping it again takes it back out.
+actions['focus-meal-none'] = (el) => {
+  const c = ctx();
+  const m = el.dataset.meal;
+  const marks = (c.day.food ?? []).filter((e) => e?.none && e.meal === m);
+  if (marks.length) store.changeList(c.key, 'food', marks, true);
+  else store.changeList(c.key, 'food', [rules.skipEntry(m)]);
+};
+actions['focus-meal-add'] = (el) => {
+  ui.food = { ...ui.food, meal: el.dataset.meal, adding: true, day: null, search: '' };
+  location.hash = 'food';
+};
+actions['log-yesterday'] = () => {
+  ui.food = { ...ui.food, adding: false, day: rules.addDays(ctx().key, -1), search: '' };
+  location.hash = 'food';
+};
 
 function calories(c, eaten) {
   const t = c.targets;
@@ -304,6 +412,8 @@ function calories(c, eaten) {
 function smallCards(c) {
   const d = c.day;
   const stepGoal = rules.stepTarget(c.key, c.plan.start, c.plan.steps);
+  const f = rules.focusFor(c.plan, c.key);
+  const easy = Boolean(f && !f.over);
   const steps = d.steps ?? 0;
   const water = d.waterMl ?? 0;
   return `
@@ -311,8 +421,9 @@ function smallCards(c) {
       <section class="card mini">
         <span class="card-title">Steps</span>
         <span class="big">${num(steps)}</span>
+        ${easy ? '<span class="small muted sub">Not counted in your two easy weeks. Log them if you like.</span>' : `
         <span class="small muted sub">of ${num(stepGoal)} today${stepGoal < c.plan.steps.target ? `. Up ${num(c.plan.steps.weeklyAdd)} every ${DOW_LONG[rules.weekday(c.plan.start)]}, to ${num(c.plan.steps.target)}.` : '. The full target.'}</span>
-        <div class="bar">${fill('steps', steps, stepGoal)}</div>
+        <div class="bar">${fill('steps', steps, stepGoal)}</div>`}
         <button type="button" class="btn compact" data-act="open-steps">${d.steps == null ? 'Add steps' : 'Update'}</button>
       </section>
       <section class="card mini">
@@ -345,7 +456,7 @@ export function todayBody() {
   const c = ctx();
   const days = rules.schedule(c.plan, c.log, c.key);
   const run = rules.missedRun(days, c.key);
-  return weighInCard(c) + weekCard(c, days) + unfinishedCards(c) + gapOffer(c, run) + finishOffer(c) + todayCardHtml(c) + nextSession(c, days, run) +
+  return weighInCard(c) + focusCard(c) + focusOffer(c) + yesterdayPrompt(c) + weekCard(c, days) + unfinishedCards(c) + gapOffer(c, run) + finishOffer(c) + todayCardHtml(c) + nextSession(c, days, run) +
     calories(c, rules.totals(c.day.food ?? [])) + smallCards(c) +
     '<div class="status" data-sync></div>';
 }

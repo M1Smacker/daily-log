@@ -37,6 +37,7 @@ const SERVING_STEP = 0.5;
 const MAX_AMOUNT = 5000; // grams or servings: anything above is a typo
 const MAX_KCAL = 10000;
 
+const fmtDay = (k) => longDate(k).replace(/^\w+ /, '');
 const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 const defaultMeal = (c) => rules.mealFor(rules.localHour(new Date(), c.plan.utcOffsetHours));
 const meal = (c) => (MEALS[ui.food.meal] ? ui.food.meal : defaultMeal(c));
@@ -88,11 +89,15 @@ function leftToday(c, eaten) {
     </section>`;
 }
 
-const entryRow = (e) => `
+const entryRow = (e) => (e.none ? `
+  <button type="button" class="entry" data-act="open-entry" data-id="${esc(e.id)}">
+    <span><b>Ate nothing</b><small>Marked as skipped</small></span>
+    <span class="entry-nums"><small>Tap to undo</small></span>
+  </button>` : `
   <button type="button" class="entry" data-act="open-entry" data-id="${esc(e.id)}">
     <span><b>${esc(e.name)}</b><small>${amountText(e)}</small></span>
     <span class="entry-nums"><b>${num(e.kcal)} kcal</b><small>${protein(e)}</small></span>
-  </button>`;
+  </button>`);
 
 // A meal is an open section, not a panel: its name on a rule with the total at the far end,
 // what was eaten, then one plain row to add more.
@@ -103,11 +108,12 @@ function mealCard(c, id) {
     <section class="meal-sec">
       <div class="meal-top">
         <h2>${MEALS[id]}</h2><i></i>
-        ${list.length ? `<span><b>${num(sum.kcal)}</b> kcal, ${list.every((e) => e.protein == null) ? 'protein not known'
+        ${list.length && list.every((e) => e.none) ? '<span>Ate nothing</span>' : list.length ? `<span><b>${num(sum.kcal)}</b> kcal, ${list.every((e) => e.protein == null) ? 'protein not known'
           : `${rules.unknownIn(list).includes('protein') ? 'at least ' : ''}${num(sum.protein)} g protein`}</span>` : ''}
       </div>
       ${list.map(entryRow).join('')}
       <button type="button" class="add-row" data-act="open-add" data-meal="${id}"><span aria-hidden="true">+</span>Add to ${MEALS[id].toLowerCase()}</button>
+      ${list.length ? '' : `<button type="button" class="link small-link" data-act="meal-none" data-meal="${id}">Ate nothing for ${MEALS[id].toLowerCase()}</button>`}
     </section>`;
 }
 
@@ -116,7 +122,7 @@ function mealCard(c, id) {
 function countsNote(c) {
   const f = dayFacts(c.day.food ?? []);
   if (isJudgeable(f)) return '';
-  return `<div class="rule-note">A day joins the weekly averages once it has ${num(COACH_DAY.judgeMinKcal)} kcal and ${COACH_DAY.judgeMinMeals} meals logged. So far: ${num(Math.round(f.kcal))} kcal and ${f.meals} ${f.meals === 1 ? 'meal' : 'meals'}.</div>`;
+  return `<div class="rule-note">A day joins the weekly averages once it has ${num(COACH_DAY.judgeMinKcal)} kcal and ${COACH_DAY.judgeMinMeals} meals logged. One meal is enough if every other meal is marked "ate nothing". So far: ${num(Math.round(f.kcal))} kcal and ${f.meals} ${f.meals === 1 ? 'meal' : 'meals'}.</div>`;
 }
 
 // ----- The Add screen -----
@@ -251,7 +257,8 @@ function addScreen(c) {
       <div class="pair">
         <button type="button" class="btn compact" data-act="scan">Scan a barcode</button>
         <button type="button" class="btn compact" data-act="quick-add">Quick add</button>
-      </div>`}`;
+      </div>
+      <div class="small muted">Not sure of the numbers? Quick add a rough guess of the calories. A guess beats a blank.</div>`}`;
 }
 
 export function foodBody() {
@@ -270,7 +277,7 @@ function dayNav(c) {
   return `
     <div class="day-nav">
       <button type="button" class="btn compact narrow" data-act="food-day" data-dir="-1" aria-label="The day before">&lsaquo;</button>
-      <b>${past ? longDate(c.key) : 'Today'}</b>
+      <b>${!past ? 'Today' : c.key === rules.addDays(c.today, -1) ? `Yesterday, ${fmtDay(c.key)}` : longDate(c.key)}</b>
       <button type="button" class="btn compact narrow" data-act="food-day" data-dir="1" aria-label="The day after" ${past ? '' : 'disabled'}>&rsaquo;</button>
     </div>
     ${past ? '<div class="note warn"><b>An earlier day</b>Anything you add or change here goes on this day, not today. <button type="button" class="link" data-act="food-today">Back to today</button></div>' : ''}`;
@@ -397,6 +404,10 @@ actions['step-amount'] = (el) => {
 // because the only other sign is the "So far" total changing.
 const ADDED_SHOWS_MS = 3500;
 function log(c, entries) {
+  // Food going into a meal that was marked "ate nothing" takes the mark away: it was not nothing.
+  const meals = new Set(entries.map((e) => e.meal));
+  const marks = (c.day.food ?? []).filter((e) => e?.none && meals.has(e.meal));
+  if (marks.length) store.changeList(c.key, 'food', marks, true);
   ui.food.added = {
     text: entries.length === 1 ? `${entries[0].name}, ${num(entries[0].kcal)} kcal` : `${entries.length} foods, ${num(rules.totals(entries).kcal)} kcal`,
     at: Date.now(),
@@ -783,6 +794,13 @@ forms.label = (fd, form) => {
   setTimeout(() => { ui.food.pick = { id, unit: 'g', amount: food.amount }; openPick(); }, 0);
 };
 
+// A meal that was really skipped, so the day can be complete. Stored as a skip entry in the food
+// list (rules.skipEntry), which logging food into that meal takes away again.
+actions['meal-none'] = (el) => {
+  const c = ctx();
+  store.changeList(c.key, 'food', [rules.skipEntry(el.dataset.meal)]);
+};
+
 // ----- Paste: nutrition copied from ChatGPT, Claude or anywhere -----
 // The text is read on the phone by fixed rules (paste.js) and fills the boxes. Nothing is saved
 // until a button is tapped, and every box can be changed first.
@@ -957,7 +975,7 @@ actions['quick-add'] = () => openSheet(`
   <form class="sheet-body" data-form="quick" novalidate>
     <div>
       <div class="card-title">Quick add</div>
-      <div class="muted" style="font-size:14px">For when you know the calories but the food is not saved. Leave protein, carbs or fat empty if you do not know them.</div>
+      <div class="muted" style="font-size:14px">Your best guess at the calories is fine. A rough number tells the Coach far more than a blank meal. Leave protein, carbs or fat empty if you do not know them.</div>
     </div>
     <label class="field"><span>What was it</span>
       <input name="name" type="text" maxlength="80" autocomplete="off" placeholder="Optional">
@@ -988,6 +1006,8 @@ actions['open-entry'] = (el) => {
   const c = ctx();
   const e = (c.day.food ?? []).find((x) => x.id === el.dataset.id);
   if (!e) return;
+  // A skip mark has nothing to edit: tapping it takes it back out.
+  if (e.none) { store.changeList(c.key, 'food', [e], true); return; }
   openSheet(`
     <form class="sheet-body" data-form="entry" data-id="${esc(e.id)}" novalidate>
       <div>

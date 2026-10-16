@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.19.0
+
+Two easy weeks, a nudge for a day with nothing logged, and a new "Copy my data for Claude".
+
+**Copy for Claude, rewritten** (`js/export-text.js`, testable on its own):
+
+- **The Coach as sentences.** The old text sent bare rule codes ("verdict W4 (note); actions A1, A4"), which a chat cannot read. Now the briefing, the weekly verdict, the actions, the numbers behind them and yesterday's day check go as the sentences the app shows, each with its code after it.
+- **Every day is printed.** A day with nothing logged used to be left out, so a half-logged week looked complete. Now every day of the last 14 is there, and a blank one says "not logged" (today says "nothing yet today"). A skipped meal is told apart, a gym day with lifts logged but never finished says so, and a missed one too.
+- **How complete the log is, up front**: days with food, days complete enough to count, mornings weighed, sessions against gym days, and the list of days with nothing logged, with "treat these as unknown, not as days of eating nothing".
+- **What a reader needs to judge it**: the maintenance estimate behind the target, the pace worked out from your goal and dates, the step target and how it rises, the phase and what it asks for, the gym days and order, the jump rule, the safety limits, that weeks run Thursday to Wednesday, that the day turns over at 4 am, and what the app does not track (sleep, hunger, mood, stress, soreness, alcohol).
+- **The longer view**: every weigh-in, every waist measurement, every week, and each lift's first session against its latest, with its rep range.
+- "?" for a number no food that day had, "+" for "at least". No keys, name or email are ever in it.
+- **Two buttons**: "Copy everything for Claude" and "Copy a short version" (the first part and the days).
+- The briefing now says food was "logged in full" on so many days, since that is what it counts. Next to the export's own count of days with any food, the old wording read as a contradiction.
+- **The spreadsheet** no longer shows a macro no food had as 0: that cell is blank. A partly known one keeps the known part and a new `at_least` column names it. New columns count meals logged and meals skipped. (A known problem from the 0.14.1 audit, now fixed.)
+
+**The easy weeks:**
+
+- **Two easy weeks.** Offered once on Today, and any time from Settings. For 14 days the app asks for two things only: a weigh-in each morning, and every meal logged, even as a rough guess. Nothing about the plan, the phases or the targets changes. Stored as `plan.focus = { from, to, closed? }`.
+- **The card on Today**: the day of the fortnight, how it is going ("weighed in on 3 of 5 mornings, every meal logged on 2 of 5 days"), and a row for each meal with Add and "Ate nothing". A morning that has not happened yet never counts against you.
+- **"Ate nothing"** tells a meal you really skipped apart from one not logged yet. It is on the easy-weeks card, and under any empty meal on Food ("Ate nothing for lunch"). It is stored as a skip entry in the day's food list (0 kcal, `none: true`, `rules.skipEntry`), shown as "Ate nothing", taken away again by a tap or by logging food into that meal, and never offered as an earlier meal to add again.
+- **The Coach counts a whole day of one meal.** One meal with every other meal marked "ate nothing" now counts in the averages, where before it needed 2 meals. The 1,200 kcal minimum still applies, so a short log is never counted as a low day.
+- **What goes quiet.** Steps are not counted (the card says so). The session card counts sessions over the last 14 days, with no target. The Coach does not press sessions, lifts, protein or steps (A3 to A6) in any week that touches the fortnight, and the briefing follows the same check, so the two still agree. Warnings about eating under 1,800 kcal or losing too fast are never quietened.
+- **At the end**: how it went, then "Bring the full plan back" or "Two more weeks". Taken within a week of the end, two more weeks carries the same run on, so the weeks already done stay part of it. Ending early takes two taps.
+- **A day with nothing logged** gets a note on Today the next day: add it while you still remember, a rough guess is fine. One tap opens Food on that day.
+- **Food says "Yesterday"** on the day arrows, and the Add screen says a rough guess of the calories is fine. The sessions line on the session card now always shows sessions in the last 14 days.
+
+Found and fixed while building it, each with a test:
+
+- With no action on the weekly card, the briefing fell back to its softer notes and could still tell you to fix your steps in the easy weeks. It now reads the same "quiet" check the card uses.
+- "Two more weeks" started a new run and forgot the first, so the briefing would have re-read those weeks as if they had not been quiet. It now carries the run on.
+- **"Ate nothing" would have failed on the real account.** It was first saved in a new field on the day, and the database's security rules only allow a fixed list of day fields, so every tap would have been refused. No device-only test could see that; it was caught by reading `firestore.rules`. It now lives in the food list, which the rules already allow, so no change to the rules is needed.
+- The Coach's random-days stress test caught the first version of the one-meal rule judging ordinary low days. The rule now only stands in for the 2 meals, never the 1,200 kcal.
+- The evening protein reminder still fired in the easy weeks, though protein is one of the things they stop pressing. It is quiet now.
+- The Add buttons on the meal rows used the style meant for the plus and minus buttons, in a much bigger font.
+
 ## 0.18.0
 
 Paste nutrition from ChatGPT or Claude.

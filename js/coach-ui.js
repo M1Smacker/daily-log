@@ -37,7 +37,7 @@ function coachInput(c) {
     plan: {
       start: c.plan.start, end: c.plan.end, phases: c.plan.phases, steps: c.plan.steps, weekStartDow: c.plan.weekStartDow,
       sessionsPerWeek: Object.keys(c.plan.weekdays ?? {}).length || 4,
-      deficitKcal: c.plan.deficitKcal, photos: c.plan.photos, pushExtra: c.plan.pushExtra ?? [],
+      deficitKcal: c.plan.deficitKcal, photos: c.plan.photos, pushExtra: c.plan.pushExtra ?? [], focus: c.plan.focus ?? null,
     },
     targetChangedOn: p?.targetChangedOn ?? null,
     startKg: p?.startKg ?? null,
@@ -131,7 +131,9 @@ export function todayCardHtml(c) {
     blocks.push(`<div class="coach-block"><div class="coach-when">Yesterday, ${esc(dayName(y.key))}</div>${lines}${tick}</div>`);
   }
 
-  const evening = coachToday(c).evening;
+  // The easy weeks do not press protein, so the evening protein reminder stays quiet in them.
+  const easy = rules.focusFor(c.plan, c.key);
+  const evening = easy && !easy.over ? null : coachToday(c).evening;
   if (evening) blocks.push(`<div class="coach-block"><div class="coach-when">Today</div>${coachLine(evening, ctx)}</div>`);
 
   const w = coachWeek(c);
@@ -145,13 +147,12 @@ export function todayCardHtml(c) {
   return `<section class="card coach"><span class="card-title">Coach</span>${blocks.join('')}</section>`;
 }
 
-// The Coach's verdicts as rule codes, for the "Copy my data for Claude" text.
-export function coachCodes(c) {
-  const w = coachWeek(c);
-  const y = coachDay(c, rules.addDays(c.key, -1));
-  const list = (items) => items.map((x) => `${x.code}${x.level && x.level !== 'none' ? ` (${x.level})` : ''}`).join(', ');
-  const out = [];
-  out.push(`Week${w.week ? ` ${w.week.from} to ${w.week.to}` : ''}: verdict ${list([w.verdict])}${w.actions.length ? `; actions ${w.actions.map((a) => a.code).join(', ')}` : ''}${w.lines.length ? `; lines ${list(w.lines)}` : ''}.`);
-  if (y) out.push(`Yesterday ${y.key}: ${y.lines.length ? list(y.lines) : 'nothing to judge'}${y.tick ? ', D8' : ''}.`);
-  return out;
+// What the Coach worked out, for "Copy my data for Claude": the week check, yesterday's day check
+// and the briefing, so the export says exactly what the screens say.
+export function coachForExport(c) {
+  return {
+    week: coachWeek(c),
+    yesterday: coachDay(c, rules.addDays(c.key, -1)),
+    brief: compose(briefing(coachInput(c)), { lift: liftName }),
+  };
 }

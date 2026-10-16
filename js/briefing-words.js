@@ -104,8 +104,8 @@ const PLAIN = {
     (v) => [`Steps came in at ${kc(v.n)} a day, on target.`],
   ],
   G9a: [
-    (v) => [`Food logged on ${v.n} of 7 days, up from ${v.m}: that fix worked.`],
-    (v) => [`${v.n} of 7 days of food logged, up from ${v.m}: the fix worked.`],
+    (v) => [`Food logged in full on ${v.n} of 7 days, up from ${v.m}: that fix worked.`],
+    (v) => [`${v.n} of 7 days of food logged in full, up from ${v.m}: the fix worked.`],
   ],
   G9b: [
     (v) => [`${v.n} sessions done, up from ${v.m}: that fix worked.`],
@@ -213,8 +213,8 @@ const FIX = {
     (v) => ({ fact: `Weight is dropping ${pct(v.R)}% a week.`, cost: `The target you set on ${dm(v.since)} has not had time to show.`, action: 'Leave it alone for 2 weeks.' }),
   ],
   X3: [
-    (v) => ({ fact: `Food was logged on ${v.n} of 7 days.`, cost: "I can't coach what I can't see.", action: 'Log every day this week.' }),
-    (v) => ({ fact: `Only ${v.n} of 7 days logged.`, cost: 'Without the log I am guessing.', action: 'Log every day this week.' }),
+    (v) => ({ fact: `Food was logged in full on ${v.n} of 7 days.`, cost: "I can't coach what I can't see.", action: 'Log every day this week.' }),
+    (v) => ({ fact: `Only ${v.n} of 7 days logged in full.`, cost: 'Without the log I am guessing.', action: 'Log every day this week.' }),
   ],
   X4: [
     (v) => ({ fact: `You have ${v.a}, ${v.b} and ${v.c} weigh-ins across the last 3 weeks.`, cost: `A real average needs ${v.needed} or more in each.`, action: 'Weigh in every morning.' }),
