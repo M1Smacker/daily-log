@@ -186,6 +186,14 @@ export const topics = [
           <p>Skip the garlic bread, cheesy dips and full-sugar drinks. They can add 400 to 600 kcal without you noticing.</p>`,
       },
       {
+        title: 'Pasting nutrition from ChatGPT or Claude',
+        body: `
+          <p>Ask ChatGPT or Claude for a meal's nutrition, copy its reply, and on Food tap Add, then "Paste nutrition". The numbers are picked out on your phone and fill the boxes. The text is never sent anywhere.</p>
+          <p>Nothing is saved until you tap Add. Check the boxes first: a chat's numbers are an estimate, and the line under the boxes says what protein, carbs and fat add up to, so a slip shows.</p>
+          <p>"Copy the format to give ChatGPT once" copies a short instruction. Paste it into ChatGPT, and from then on its replies end in a block the app reads whole.</p>
+          <p>Numbers per 100 g are spotted and never scaled by guesswork: the app asks how much you ate. A range like 90 to 110 g is used at its middle and said out loud. A meal listed in parts with no total is added up, and says so.</p>`,
+      },
+      {
         title: 'Food swaps',
         body: `
           <p>When something is not in the house, swap it for one of these.</p>

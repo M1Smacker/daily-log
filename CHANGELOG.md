@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.18.0
+
+Paste nutrition from ChatGPT or Claude.
+
+- **"Paste nutrition"** on the Add screen. Paste a chat's reply, the whole thing if you like, and the boxes fill themselves in: name, calories, protein, carbs, fat, fibre and the serving weight. Nothing is saved until you tap Add, and every box can be changed first.
+- Read on the phone by fixed rules (`js/paste.js`). No AI, no key, no signal needed, and the text never leaves the phone.
+- Reads the shapes chats use: "Label: number", "number label", one line split by pipes or commas, markdown tables, tables copied from the ChatGPT screen (tabs), bold, bullets, emoji, "about" and "~", kJ, sodium in mg, UK and US spellings, Arabic-Indic digits.
+- **Never guesses.** A number that is not there stays unknown, never zero. A range is used at its middle and said out loud. Per 100 g numbers are spotted and the app asks how much you ate. A meal in parts is added up and says which parts, a total row wins over the parts, and a part with no figure for something leaves the meal with none for it.
+- **Add** logs it once. **Save to My foods and add** also keeps it, marked "Pasted from a chat, an estimate".
+- **"Copy the format to give ChatGPT once"** copies a short instruction, so its replies end in a block this reads whole.
+- A line under the boxes says what protein, carbs and fat add up to, and calories far from that are asked about once.
+
+Found and fixed while building it, each with a test:
+
+- A one-line paste split by pipes was read as a table, so "100 g protein" became the calories.
+- A "Summary:" line repeating the meal was added on as a second food, doubling it.
+- A table with no heading row took a value cell ("1100 kcal") as a column heading.
+- A second paste kept the first paste's name, so a different food could be saved under the wrong name. The same for "how much you ate" and for "No, they are for the whole meal". A name or amount you type yourself is kept.
+- An invalid font rule would have left the paste box in small text, which makes iPhone Safari zoom in when it is tapped.
+
 ## 0.17.0
 
 The rules the app was applying in silence now say so on the screen where they apply.

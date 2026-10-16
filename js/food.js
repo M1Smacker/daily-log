@@ -13,6 +13,7 @@ import * as lookup from './lookup.js';
 import { foods as preloaded } from './foods.js';
 import { dayFacts, isJudgeable } from './coach.js';
 import { DAY as COACH_DAY } from './coach-constants.js';
+import { readNutrition, ASK_FORMAT } from './paste.js';
 
 // The Food screen can show an earlier day (ui.food.day), for a meal that was forgotten.
 // Everything below reads and saves through this, so `key` and `day` are the day on screen
@@ -29,6 +30,7 @@ const LISTS = { recent: 'Recent', mine: 'My foods', meals: 'Meals', recipes: 'Re
 const SOURCES = {
   usda: 'USDA', off: 'Open Food Facts', web: 'From the web, approximate',
   plan: 'From your plan, approximate', est: 'An estimate, approximate', own: 'You typed it', label: 'Read from the pack, checked by you',
+  paste: 'Pasted from a chat, an estimate',
 };
 const GRAM_STEP = 10;
 const SERVING_STEP = 0.5;
@@ -241,6 +243,7 @@ function addScreen(c) {
     </div>
     <section class="card"><div data-food-list>${listHtml(c)}</div></section>
     ${picking ? '' : `
+      <button type="button" class="btn compact" data-act="paste-nutrition">Paste nutrition from ChatGPT or Claude</button>
       <div class="pair">
         <button type="button" class="btn compact" data-act="edit-food">New food</button>
         <button type="button" class="btn compact" data-act="new-recipe">New recipe</button>
@@ -778,6 +781,174 @@ forms.label = (fd, form) => {
   if (lookup.isBarcode(barcode)) food.barcode = barcode;
   store.setFood(id, food);
   setTimeout(() => { ui.food.pick = { id, unit: 'g', amount: food.amount }; openPick(); }, 0);
+};
+
+// ----- Paste: nutrition copied from ChatGPT, Claude or anywhere -----
+// The text is read on the phone by fixed rules (paste.js) and fills the boxes. Nothing is saved
+// until a button is tapped, and every box can be changed first.
+
+const PASTED = ['kcal', 'protein', 'carbs', 'fat', 'fibre', 'grams'];
+const PASTE_EXTRA = ['sugar', 'satFat', 'salt'];
+
+actions['paste-nutrition'] = () => {
+  const c = ctx();
+  openSheet(`
+  <form class="sheet-body" data-form="paste" novalidate>
+    <div>
+      <div class="card-title">Paste nutrition</div>
+      <div class="muted" style="font-size:14px">From ChatGPT, Claude or anywhere. Pasting the whole reply is fine: the numbers are picked out on your phone, and nothing is saved until you tap Add.</div>
+    </div>
+    <label class="field"><span>Paste here</span>
+      <textarea name="text" class="paste-box" rows="6" data-paste autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Calories: 1100 kcal&#10;Protein: 100 g&#10;..."></textarea>
+    </label>
+    <button type="button" class="link" data-act="paste-format">Copy the format to give ChatGPT once</button>
+    <div class="small muted" data-paste-msg role="status">Paste, and the boxes below fill themselves in.</div>
+    <div data-paste-100 hidden>
+      <div class="note warn"><b>These look like per 100 g</b>So the boxes below are for 100 g, and the app needs how much you ate.
+        <button type="button" class="link" data-act="paste-not-100">No, they are for the whole meal</button></div>
+      ${field('eaten', 'How much you ate', '', { unit: 'g', required: false })}
+    </div>
+    <input type="hidden" name="per100" value="0">
+    <input type="hidden" name="drink" value="0">
+    ${PASTE_EXTRA.map((k) => `<input type="hidden" name="${k}" value="">`).join('')}
+    <label class="field"><span>What was it</span>
+      <input name="name" type="text" maxlength="80" autocomplete="off" placeholder="Optional, unless you save it">
+    </label>
+    <div class="field-grid">
+      ${field('kcal', 'Calories', '', { unit: 'kcal' })}
+      ${field('protein', 'Protein', '', { unit: 'g', required: false })}
+      ${field('carbs', 'Carbs', '', { unit: 'g', required: false })}
+      ${field('fat', 'Fat', '', { unit: 'g', required: false })}
+      ${field('fibre', 'Fibre', '', { unit: 'g', required: false })}
+      <div data-paste-grams>${field('grams', 'One serving weighs', '', { unit: 'g', required: false })}</div>
+    </div>
+    <div class="small muted" data-paste-check></div>
+    <div class="small muted">An empty box is a number nobody gave. It stays unknown, never zero.</div>
+    <button class="btn primary">Add to ${MEALS[meal(c)].toLowerCase()}</button>
+    <button type="button" class="btn" data-act="paste-save">Save to My foods and add</button>
+    <button type="button" class="btn quiet" data-act="close-sheet">Cancel</button>
+  </form>`);
+};
+
+// The line under the boxes: what protein, carbs and fat add up to, so a slip shows before saving.
+function pasteCheck(form) {
+  const v = (k) => typedNumberIn(form, k);
+  const [p, cb, f, k] = [v('protein'), v('carbs'), v('fat'), v('kcal')];
+  const el = form.querySelector('[data-paste-check]');
+  if (!el) return;
+  el.textContent = p !== null && cb !== null && f !== null
+    ? `Protein, carbs and fat add up to about ${num(p * 4 + cb * 4 + f * 9)} kcal${k ? `, against ${num(k)} given` : ''}.`
+    : '';
+}
+const typedNumberIn = (form, k) => rules.typedNumber(form.querySelector(`[name="${k}"]`)?.value ?? '');
+
+function setPer100(form, on) {
+  form.querySelector('[name="per100"]').value = on ? '1' : '0';
+  form.querySelector('[data-paste-100]').hidden = !on;
+  form.querySelector('[data-paste-grams]').hidden = on;
+}
+
+// Reads the pasted text into the boxes. The text is the source: pasting again refills every box,
+// and a box typed in afterwards keeps what was typed until the text changes.
+document.addEventListener('input', (e) => {
+  const form = e.target.closest?.('form[data-form="paste"]');
+  if (!form) return;
+  if (!e.target.matches('[data-paste]')) { pasteCheck(form); return; }
+  const r = readNutrition(e.target.value);
+  const set = (k, v) => { const box = form.querySelector(`[name="${k}"]`); if (box) box.value = v ?? ''; };
+  for (const k of PASTED) set(k, r[k]);
+  for (const k of PASTE_EXTRA) set(k, r.extra[k]);
+  // A name the paste filled in follows the paste, so a second paste never keeps the first food's
+  // name. A name typed by hand is kept.
+  const nameBox = form.querySelector('[name="name"]');
+  if (!nameBox.value.trim() || nameBox.value === form.dataset.autoName) {
+    nameBox.value = r.name ?? '';
+    form.dataset.autoName = r.name ?? '';
+  }
+  set('drink', r.drink ? '1' : '0');
+  // "No, they are for the whole meal" holds for the text it was said about, not for the next paste.
+  const per100 = r.per100 && form.dataset.not100 !== e.target.value.trim();
+  setPer100(form, per100);
+  const eaten = form.querySelector('[name="eaten"]');
+  if (!eaten.value.trim() || eaten.value === form.dataset.autoEaten) {
+    eaten.value = per100 && r.grams ? r.grams : '';
+    form.dataset.autoEaten = eaten.value;
+  }
+  form.querySelectorAll('.form-error').forEach((x) => { x.hidden = true; });
+  delete form.dataset.warned;
+  const msg = form.querySelector('[data-paste-msg]');
+  const read = ['kcal', 'protein', 'carbs', 'fat', 'fibre'].filter((k) => r[k] !== null).map((k) => ({ kcal: 'calories', fibre: 'fibre' })[k] ?? k);
+  msg.className = `small ${!e.target.value.trim() ? 'muted' : r.kcal === null ? 'warn-ink' : 'ok-ink'}`;
+  msg.innerHTML = !e.target.value.trim() ? 'Paste, and the boxes below fill themselves in.'
+    : !read.length ? 'No nutrition numbers found in that. Check it has lines like "Calories: 1100 kcal", or type the numbers into the boxes.'
+    : `Read ${read.length} of 5: ${read.join(', ')}.${r.kcal === null ? ' No calories found: type them in.' : ''} Check them before you add.`
+      + r.notes.map((n) => `<br>${esc(n)}`).join('');
+  pasteCheck(form);
+});
+
+actions['paste-not-100'] = (el) => {
+  const form = el.closest('form');
+  form.dataset.not100 = form.querySelector('[data-paste]').value.trim();
+  setPer100(form, false);
+};
+
+actions['paste-save'] = (el) => {
+  const form = el.closest('form');
+  form.dataset.save = '1';
+  form.requestSubmit();
+};
+
+actions['paste-format'] = async (el) => {
+  try {
+    await navigator.clipboard.writeText(ASK_FORMAT);
+    el.textContent = 'Copied. Paste it into ChatGPT once, and its replies will end in a block this reads whole.';
+  } catch {
+    // Clipboard blocked: show the text so it can be copied by hand.
+    if (!el.nextElementSibling?.matches('.copy-box')) {
+      el.insertAdjacentHTML('afterend', `<textarea class="copy-box paste-format" readonly>${esc(ASK_FORMAT)}</textarea>`);
+    }
+    el.nextElementSibling.select();
+  }
+};
+
+forms.paste = (fd, form) => {
+  const c = ctx();
+  const save = form.dataset.save === '1';
+  form.dataset.save = '';
+  const n = Object.fromEntries([...PASTED, ...PASTE_EXTRA, 'eaten'].map((k) => [k, readNumber(fd, k)]));
+  const per100 = fd.get('per100') === '1';
+  const drink = fd.get('drink') === '1';
+  const name = String(fd.get('name') ?? '').trim().slice(0, 80);
+  if (!n.kcal) return 'No calories yet. Paste the nutrition, or type the calories in.';
+  if (n.kcal > MAX_KCAL) return 'That is more calories than one meal can have. Check for a slip.';
+  const macros = [n.protein, n.carbs, n.fat, n.fibre].map((x) => x ?? 0);
+  if (per100) {
+    // 100 g of anything holds at most 100 g of nutrients, and pure fat is 900 kcal.
+    if (n.kcal > 900 || Math.max(...macros) > 100) return 'Those are too high for 100 g. If they are for the whole meal, tap "No, they are for the whole meal".';
+    if (!n.eaten || n.eaten > MAX_AMOUNT) return 'Say how much you ate, in grams.';
+  } else if (Math.max(...macros) > 1000 || (n.grams !== null && n.grams > MAX_AMOUNT)) {
+    return 'One of those numbers is too big. Check for a slip.';
+  }
+  if (save && !name) return 'Give it a name, so you can find it in My foods.';
+  // Calories far from what the macros add up to usually mean a slip. Ask once, then accept.
+  const fromMacros = (n.protein ?? 0) * 4 + (n.carbs ?? 0) * 4 + (n.fat ?? 0) * 9;
+  const known = [n.protein, n.carbs, n.fat].every((x) => x !== null);
+  if (known && n.kcal > 50 && (fromMacros > n.kcal * 1.6 || fromMacros < n.kcal * 0.5) && form.dataset.warned !== String(fromMacros)) {
+    form.dataset.warned = String(fromMacros);
+    return `Those macros add up to about ${Math.round(fromMacros)} kcal, but the calories say ${n.kcal}. If that is right, tap the button again.`;
+  }
+  const unitWord = drink ? 'ml' : 'g';
+  const extra = Object.fromEntries(PASTE_EXTRA.filter((k) => n[k] !== null).map((k) => [k, n[k]]));
+  const id = `my-${newId()}`;
+  const nums = { kcal: Math.round(n.kcal), protein: n.protein, carbs: n.carbs, fat: n.fat, fibre: n.fibre };
+  const food = per100
+    ? { id, name: name || 'Pasted food', serving: `100 ${unitWord}`, byGrams: true, grams: 100, amount: n.eaten, ...nums, source: 'paste' }
+    : { id, name: name || 'Pasted meal', serving: n.grams ? `${n.grams} ${unitWord}` : '1 serving', amount: 1, ...nums, source: 'paste', ...(n.grams ? { grams: n.grams } : {}) };
+  if (Object.keys(extra).length) food.extra = extra;
+  const entry = per100 ? entryFrom(food, n.eaten, 'g', meal(c)) : entryFrom(food, 1, 'serving', meal(c));
+  if (save) store.setFood(id, food);
+  else delete entry.foodId; // a one-off: nothing in My foods to point at
+  log(c, [entry]);
 };
 
 // ----- Quick add: calories typed straight in -----

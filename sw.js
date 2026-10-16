@@ -4,7 +4,7 @@
 // To release a change: bump VERSION here and in js/version.js. The app then shows
 // "Update available" and switches over when Refresh is tapped.
 
-const VERSION = '0.17.0';
+const VERSION = '0.18.0';
 const CACHE = `daily-log-${VERSION}`;
 const SDK_CACHE = 'firebase-sdk'; // versioned by its own URLs, so it survives app updates
 
@@ -27,6 +27,7 @@ const SHELL = [
   'js/foods.js',
   'js/guide.js',
   'js/lookup.js',
+  'js/paste.js',
   'js/plan.js',
   'js/progress.js',
   'js/pwa.js',
